@@ -248,7 +248,34 @@ export async function POST(request: NextRequest) {
       }
 
       const result = await response.json();
-      return parseJson(result.choices?.[0]?.message?.content);
+      const generatedContent = result.choices?.[0]?.message?.content;
+      try {
+        return parseJson(generatedContent);
+      } catch (parseError) {
+        // A valid HTTP response can still contain truncated or malformed JSON.
+        // Give the same agent one repair pass instead of failing the whole project.
+        const repairPayload: Record<string, unknown> = {
+          ...payload,
+          temperature: 0,
+          max_completion_tokens: Math.min(maxTokens, 6000),
+          messages: [
+            {
+              role: "system",
+              content: `You are a JSON repair worker for the ${agentName}. Convert the supplied response into exactly one valid JSON object matching the original requested schema. Preserve all useful content and complete Luau source code. Do not add markdown, explanations, comments outside JSON, or trailing commas. If a code string contains quotes or newlines, escape them correctly.`
+            },
+            {
+              role: "user",
+              content: `Original task: ${instructions}\n\nOriginal response to repair:\n${typeof generatedContent === "string" ? generatedContent.slice(0, 24000) : String(generatedContent)}\n\nReturn only the repaired JSON object.`
+            }
+          ]
+        };
+        const repairedResponse = await sendRequest(repairPayload);
+        if (!repairedResponse.ok) {
+          throw parseError;
+        }
+        const repaired = await repairedResponse.json();
+        return parseJson(repaired.choices?.[0]?.message?.content);
+      }
     }
 
     // 1. Architect: decide the game loop, world progression and systems before code exists.
@@ -289,7 +316,7 @@ export async function POST(request: NextRequest) {
       askAgent(
         "Gameplay Agent",
         `Build playable systems from this approved blueprint: ${blueprintContext}
-        Return JSON with files: array of 1-5 objects {path,kind,code}.
+        Return JSON with files: array of 4-8 objects {path,kind,code}. For Full game mode, prioritize a playable minimum game over decorative extras: provide complete server, client and shared module scripts. Split independent systems into separate files with matching service paths.
         Create real gameplay behavior, not empty placeholders. For Game map mode, return files: [] and do not invent gameplay systems. For UI interface mode, focus on the requested interface and its client-side behavior. For Lua script mode, create only the requested script and its essential dependencies. For Full game and Gameplay system modes, include the necessary gameplay systems. Include server-side validation for important state changes, RemoteEvents/RemoteFunctions where needed, safe DataStore handling with pcall and sensible defaults, and a clear client/server split. Avoid duplicating the environment builder. Use paths that clearly identify Roblox services, such as ServerScriptService/Game.server.lua, StarterPlayer/StarterPlayerScripts/HUD.client.lua or ReplicatedStorage/Shared/Config.module.lua. Also return gameplayNotes: array of 2-4 strings. Every file must be full source code, never pseudocode.`,
         4200,
         "",
@@ -298,10 +325,14 @@ export async function POST(request: NextRequest) {
     ]);
 
     const environmentFiles = validFiles(environment.files, 4);
-    const gameplayFiles = validFiles(gameplay.files, 5);
-    const files = uniqueByPath([...environmentFiles, ...gameplayFiles]).slice(0, 8);
+    const gameplayFiles = validFiles(gameplay.files, 8);
+    const files = uniqueByPath([...environmentFiles, ...gameplayFiles]).slice(0, 12);
 
     const environmentPlan = validScenePlan(environment.buildPlan);
+    if (mode === "Full game" && gameplayFiles.length === 0) {
+      return NextResponse.json({ error: "Gameplay Agent returned no usable Luau scripts. Madara AI stopped the export instead of giving you an empty game ZIP. Try Generate again; if it repeats, check the selected Groq model and API limits." }, { status: 502 });
+    }
+
     if (files.length === 0 && environmentPlan.length === 0) {
       return NextResponse.json({ error: "The agents completed the plan but did not return usable scripts or 3D scene objects. Try a more specific idea." }, { status: 502 });
     }
