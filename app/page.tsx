@@ -202,7 +202,10 @@ export default function Home() {
       if (!destinationRoot || segments.length === 0) continue;
 
       let relativePath = segments.join("/");
-      if (file.kind === "module") relativePath = relativePath.replace(/\.module\.lua$/i, ".lua");
+      if (file.kind === "module") {
+        relativePath = relativePath.replace(/\.module\.lua$/i, ".lua");
+        if (!/\.lua$/i.test(relativePath)) relativePath += ".lua";
+      }
       if (file.kind === "server" && !/\.server\.lua$/i.test(relativePath)) {
         relativePath = relativePath.replace(/\.lua$/i, "") + ".server.lua";
       }
