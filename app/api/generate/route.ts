@@ -206,11 +206,19 @@ export async function POST(request: NextRequest) {
 
       let response = await sendRequest(payload);
       let detail = "";
+      let responseBodyRead = false;
+      const readResponseBody = async () => {
+        if (!responseBodyRead) {
+          detail = await response.text();
+          responseBodyRead = true;
+        }
+        return detail;
+      };
 
       // Groq free/on-demand TPM windows can reject parallel specialist agents.
       // Wait for the provider's stated cooldown and retry once with a smaller output budget.
       if (response.status === 429) {
-        detail = await response.text();
+        await readResponseBody();
         const retryMatch = detail.match(/try again in\s+([0-9.]+)s/i);
         const headerDelay = Number(response.headers.get("retry-after") || 0);
         const bodyDelay = retryMatch ? Number(retryMatch[1]) : 0;
@@ -222,13 +230,14 @@ export async function POST(request: NextRequest) {
           temperature: 0.1
         };
         response = await sendRequest(retryPayload);
-        if (!response.ok) detail = await response.text();
+        responseBodyRead = false;
+        if (!response.ok) await readResponseBody();
       }
 
       // Groq can reject constrained JSON generation for some GPT-OSS outputs.
       // Retry once in ordinary chat mode while keeping the strict JSON instruction.
       if (!response.ok) {
-        detail = await response.text();
+        await readResponseBody();
         const jsonValidationFailure =
           response.status === 400 &&
           /failed to validate json|failed_generation|json mode|response_format/i.test(detail);
@@ -247,7 +256,8 @@ export async function POST(request: NextRequest) {
             }
           ];
           response = await sendRequest(retryPayload);
-          if (!response.ok) detail = await response.text();
+          responseBodyRead = false;
+          if (!response.ok) await readResponseBody();
         }
       }
 
