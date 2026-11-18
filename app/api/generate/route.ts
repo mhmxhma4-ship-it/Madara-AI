@@ -179,7 +179,7 @@ export async function POST(request: NextRequest) {
 
     // Keep the whole multi-agent pipeline inside Vercel's function window.
     // Individual agents and provider fallbacks share one hard deadline.
-    const generationDeadline = Date.now() + 53_000;
+    const generationDeadline = Date.now() + 56_000;
 
     // Once Groq reports its daily token quota is exhausted, bypass it for every
     // remaining agent in this generation instead of repeatedly hitting a dead quota.
@@ -439,7 +439,7 @@ export async function POST(request: NextRequest) {
       Define the core gameplay loop, player goals, progression, rewards, failure/retry loop and multiplayer assumptions. Do not invent unrelated themes. Define a premium realistic 3D art direction with believable proportions, natural colors, realistic materials, lighting and weather. Do not choose Minecraft, voxel, blocky or low-poly aesthetics unless explicitly requested.`,
       2200,
       "",
-      9000
+      10000
     );
 
     const blueprintContext = JSON.stringify({
@@ -463,7 +463,7 @@ export async function POST(request: NextRequest) {
         parentPath is relative to Workspace, such as "World/SpawnArea". className Part or SpawnLocation. Use studs and believable scale. Avoid floating geometry. Every file must be complete Luau source, never pseudocode.`,
       3400,
       "",
-      11000
+      14000
     );
 
     const gameplay = await askAgent(
@@ -473,12 +473,12 @@ export async function POST(request: NextRequest) {
         THIS IS A FULL GAME BUILD, NOT A DEMO OR PLAN. Implement the core gameplay loop described by the user, not generic placeholder code. Include all essential dependencies and a clear server/client split. For a multiplayer game, implement server-authoritative player/session state and safe handling when players join/leave. For progression games, implement the actual currency/reward/progression loop. For stage games, implement checkpoints, completion and respawn. For combat games, implement validated damage, cooldowns and enemy/boss behavior. Use RemoteEvents created safely by the server and validate every client request. Use DataStoreService with pcall, retries or graceful defaults; the game must still run if saving is unavailable in Studio. Use correct Roblox service paths and full scripts. Do not create UI; the Interface Agent owns UI. Do not duplicate static map parts from buildPlan.`,
       3800,
       "",
-      14000
+      17000
     );
 
     let interfaceAgent: JsonObject = { files: [], gameplayNotes: [] };
     let interfaceAgentError = "";
-    if ((mode === "Full game" || mode === "UI interface") && Date.now() < generationDeadline - 8500) {
+    if ((mode === "Full game" || mode === "UI interface") && Date.now() < generationDeadline - 9500) {
       try {
         interfaceAgent = await askAgent(
           "Roblox UI Agent",
@@ -487,7 +487,7 @@ export async function POST(request: NextRequest) {
             For Full game, provide a polished premium mobile-friendly StarterPlayer/StarterPlayerScripts/HUD.client.lua LocalScript that creates its ScreenGui at runtime, scales for touch and desktop, displays the actual game stats/progression, and connects only to RemoteEvents/RemoteFunctions that are part of the blueprint. Use modern high-quality game HUD design, clean typography, restrained colors, subtle gradients and strokes, consistent spacing and responsive controls; never use childish blocky/Minecraft-style UI unless requested. If no remotes are specified, coordinate names with the Gameplay Agent using conventional names and document them in gameplayNotes. Include clear feedback, readable buttons and safe touch input. Do not implement server-authoritative game logic in the client. For UI interface mode, focus on the requested UI and its client behavior. Return full runnable Luau, not pseudocode.`,
           1500,
           "",
-          8000
+          9000
         );
       } catch (error) {
         // UI is an optional specialist: a provider TPM limit must not discard
@@ -495,6 +495,8 @@ export async function POST(request: NextRequest) {
         interfaceAgentError = error instanceof Error ? error.message : "Roblox UI Agent could not finish.";
         console.warn("Madara AI UI agent skipped:", interfaceAgentError);
       }
+    } else if (mode === "Full game" || mode === "UI interface") {
+      interfaceAgentError = "UI generation was skipped to preserve the core game package within the serverless time limit.";
     }
 
     const environmentFiles = validFiles(environment.files, 4);
@@ -528,7 +530,7 @@ export async function POST(request: NextRequest) {
     let reviewWarnings: string[] = [];
     let reviewerCompleted = false;
     try {
-      if (Date.now() >= generationDeadline - 6500) throw new Error("Not enough generation time remains for the optional reviewer.");
+      if (Date.now() >= generationDeadline - 7500) throw new Error("Not enough generation time remains for the optional reviewer.");
       const review = await askAgent(
         "Luau Code Reviewer",
         `Review the complete generated project and 3D scene plan for Roblox Luau correctness, missing dependencies, incorrect service paths, server/client boundary mistakes, unsafe remote handling, DataStore error handling, floating or badly scaled map geometry and obvious logic defects. Return JSON with:
@@ -536,7 +538,7 @@ export async function POST(request: NextRequest) {
         IMPORTANT: Return a corrected file only when you made a real improvement. Preserve the exact path and kind for every corrected file. Do not rewrite working code just for style. Do not add unrelated systems. If a file is already sound, omit it from files. Never say code was executed or tested.`,
         3000,
         JSON.stringify({ blueprint: architect, files, environmentPlan }),
-        6000
+        7000
       );
       const corrected = validFiles(review.files, 8);
       for (const fix of corrected) {
