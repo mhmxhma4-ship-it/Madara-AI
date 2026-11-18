@@ -175,7 +175,7 @@ export async function runGenerationPipeline(request: Request) {
 
     // Keep the whole multi-agent pipeline inside Vercel's function window.
     // Individual agents and provider fallbacks share one hard deadline.
-    const generationDeadline = Date.now() + 55 * 60_000;
+    const generationDeadline = Date.now() + 115 * 60_000;
 
     // Once Groq reports its daily token quota is exhausted, bypass it for every
     // remaining agent in this generation instead of repeatedly hitting a dead quota.
@@ -186,7 +186,7 @@ export async function runGenerationPipeline(request: Request) {
       instructions: string,
       maxTokens = 4096,
       extraContext = "",
-      timeoutMs = 180000
+      timeoutMs = 20 * 60_000
     ): Promise<JsonObject> {
       const agentDeadline = Math.min(generationDeadline, Date.now() + timeoutMs);
       const payload: Record<string, unknown> = {
@@ -210,7 +210,7 @@ export async function runGenerationPipeline(request: Request) {
         const messages = Array.isArray(requestPayload.messages) ? requestPayload.messages as Array<{ role?: string; content?: string }> : [];
         const requestOptions = (providerName: string) => {
           // Fast-fail earlier providers so the final fallback has time for large Roblox JSON.
-          const providerTimeout = providerName === "Gemini" ? 120000 : providerName === "Cloudflare Workers AI" ? 90000 : 90000;
+          const providerTimeout = providerName === "Gemini" ? 15 * 60_000 : providerName === "Cloudflare Workers AI" ? 12 * 60_000 : 12 * 60_000;
           return {
             signal: AbortSignal.timeout(Math.max(1, Math.min(providerTimeout, agentDeadline - Date.now()))),
             cache: "no-store" as RequestCache
@@ -465,7 +465,7 @@ export async function runGenerationPipeline(request: Request) {
         parentPath is relative to Workspace, such as "World/SpawnArea". className Part or SpawnLocation. Use studs and believable scale. Avoid floating geometry. Every file must be complete Luau source, never pseudocode.`,
       3400,
       "",
-      180000
+      20 * 60_000
     );
 
     const gameplay = await askAgent(
@@ -489,7 +489,7 @@ export async function runGenerationPipeline(request: Request) {
             For Full game, provide a polished premium mobile-friendly StarterPlayer/StarterPlayerScripts/HUD.client.lua LocalScript that creates its ScreenGui at runtime, scales for touch and desktop, displays the actual game stats/progression, and connects only to RemoteEvents/RemoteFunctions that are part of the blueprint. Use modern high-quality game HUD design, clean typography, restrained colors, subtle gradients and strokes, consistent spacing and responsive controls; never use childish blocky/Minecraft-style UI unless requested. If no remotes are specified, coordinate names with the Gameplay Agent using conventional names and document them in gameplayNotes. Include clear feedback, readable buttons and safe touch input. Do not implement server-authoritative game logic in the client. For UI interface mode, focus on the requested UI and its client behavior. Return full runnable Luau, not pseudocode.`,
           1500,
           "",
-          120000
+          15 * 60_000
         );
       } catch (error) {
         // UI is an optional specialist: a provider TPM limit must not discard
@@ -540,7 +540,7 @@ export async function runGenerationPipeline(request: Request) {
         IMPORTANT: Return a corrected file only when you made a real improvement. Preserve the exact path and kind for every corrected file. Do not rewrite working code just for style. Do not add unrelated systems. If a file is already sound, omit it from files. Never say code was executed or tested.`,
         3000,
         JSON.stringify({ blueprint: architect, files, environmentPlan }),
-        90000
+        10 * 60_000
       );
       const corrected = validFiles(review.files, 8);
       for (const fix of corrected) {
