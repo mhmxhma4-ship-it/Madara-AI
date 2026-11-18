@@ -49,3 +49,10 @@ footer{max-width:1160px;margin:auto;border-top:1px solid var(--line);padding:23p
 .publish-security{margin-top:18px!important;font-size:12px!important;color:#9299ad!important}
 .publish-doc-link{display:inline-flex;align-items:center;gap:7px;margin-top:13px;color:#c4b5fd;font-size:13px}
 @media(max-width:640px){.publish-panel{margin:36px 14px;padding:21px 17px}.publish-id-row{grid-template-columns:1fr}}
+
+
+/* Agent review states */
+.agent-result-warning .agent-result-icon {
+  background: rgba(245, 158, 11, 0.14);
+  color: #fbbf24;
+}
