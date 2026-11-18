@@ -432,7 +432,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error("Madara AI pipeline error:", error);
     const message = error instanceof Error ? error.message : "";
-    if (message.includes("Game Architect:") || message.includes("Environment Agent:") || message.includes("Gameplay Agent:")) {
+    if (message.includes("Game Architect:") || message.includes("Environment Agent:") || message.includes("Gameplay Agent:") || message.includes("Roblox UI Agent:")) {
       return NextResponse.json({ error: message }, { status: 502 });
     }
     if (error instanceof Error && error.name === "TimeoutError") {
