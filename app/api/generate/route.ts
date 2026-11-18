@@ -165,12 +165,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Choose a valid creation mode." }, { status: 400 });
     }
 
-    const apiKey = process.env.OPENAI_API_KEY;
-    const model = process.env.OPENAI_MODEL || "openai/gpt-oss-120b";
-    const baseUrl = (process.env.OPENAI_BASE_URL || "https://api.openai.com/v1").replace(/\/$/, "");
-    const geminiApiKey = process.env.GEMINI_API_KEY;
-    const cloudflareAccountId = process.env.CLOUDFLARE_ACCOUNT_ID;
-    const cloudflareApiToken = process.env.CLOUDFLARE_API_TOKEN;
+    // Remove accidental whitespace/newlines from Vercel environment values before using them in headers.
+    const cleanSecret = (value?: string) => value?.replace(/\s+/g, "");
+    const apiKey = cleanSecret(process.env.OPENAI_API_KEY);
+    const model = (process.env.OPENAI_MODEL || "openai/gpt-oss-120b").trim();
+    const baseUrl = (process.env.OPENAI_BASE_URL || "https://api.openai.com/v1").trim().replace(/\/$/, "");
+    const geminiApiKey = cleanSecret(process.env.GEMINI_API_KEY);
+    const cloudflareAccountId = cleanSecret(process.env.CLOUDFLARE_ACCOUNT_ID);
+    const cloudflareApiToken = cleanSecret(process.env.CLOUDFLARE_API_TOKEN);
     if (!apiKey && !geminiApiKey && !(cloudflareAccountId && cloudflareApiToken)) {
       return NextResponse.json({ error: "AI is not connected. Add at least one provider key in Vercel and redeploy." }, { status: 503 });
     }
