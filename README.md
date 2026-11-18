@@ -8,7 +8,7 @@ Mobile-first AI Roblox game builder using Next.js 15, TypeScript and Tailwind CS
 - Multi-agent blueprint, environment and gameplay generation, plus a separate Luau review pass.
 - Deterministic checks for unsafe dynamic code and unverified numeric asset requires.
 - Structured Luau project files and Roblox Studio setup instructions.
-- Code preview, copy and plain-text bundle download.
+- Code preview, copy and structured Rojo-compatible ZIP export.
 - Provider secrets stay on the server.
 
 ## Required Vercel environment variables
@@ -25,7 +25,7 @@ npm run dev
 ```
 
 ## Roblox workflow and limitation
-Madara AI generates Luau source files and setup instructions. Import each file into the matching location in Roblox Studio, review it and test it before publishing.
+Madara AI generates Luau source files and setup instructions. Use the Studio Connector plugin to insert scripts directly, or download the structured Rojo-compatible ZIP and use it with Rojo. Review and test before publishing.
 
 Direct Roblox publishing requires a valid place file and authorized Open Cloud credentials. This app does not yet convert generated scripts into a complete .rbxl place file or publish an untested game. The automated reviewer is not a substitute for running the project in Roblox Studio. A safe publishing pipeline needs a trusted place-building/export step. Never expose Roblox credentials in browser code.
 
@@ -64,4 +64,4 @@ A source plugin is included at [roblox-plugin/MadaraAI.plugin.lua](roblox-plugin
 
 The plugin uses Roblox Studio's plugin HTTP permission prompt for the Madara AI domain. It does not need your Roblox password, cookie, or publishing API key. Generated scripts are inserted into service paths and same-path scripts may be updated; Studio undo recording is used for the insertion. Roblox Studio is required — this plugin cannot run inside the Roblox iPhone app.
 
-Official references: [Create and install Studio plugins](https://create.roblox.com/docs/studio/plugins) · [HTTP requests from plugins](https://create.roblox.com/docs/cloud-services/http-service)
+For ZIP import, install [Rojo](https://rojo.space/) and use its build/sync workflow. Official references: [Create and install Studio plugins](https://create.roblox.com/docs/studio/plugins) · [HTTP requests from plugins](https://create.roblox.com/docs/cloud-services/http-service)
