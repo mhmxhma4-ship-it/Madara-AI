@@ -5,7 +5,9 @@ Mobile-first AI Roblox game builder using Next.js 15, TypeScript and Tailwind CS
 ## Features
 - Mobile-first prompt builder with Full game, Map, Gameplay, UI and Luau modes.
 - Server-side AI generation at POST /api/generate.
-- Multi-agent blueprint, environment and gameplay generation, plus a separate Luau review pass.
+- Multi-agent blueprint, gameplay generation and a structured 3D scene plan.
+- Studio Connector builds validated Parts and SpawnLocations directly in Workspace, then inserts Luau scripts.
+- Separate Luau review pass and deterministic unsafe-code checks.
 - Deterministic checks for unsafe dynamic code and unverified numeric asset requires.
 - Structured Luau project files and Roblox Studio setup instructions.
 - Code preview, copy and structured Rojo-compatible ZIP export.
