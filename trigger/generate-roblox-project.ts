@@ -1,6 +1,6 @@
 import { task } from "@trigger.dev/sdk";
 import { NextRequest } from "next/server";
-import { runGenerationPipeline } from "../app/api/generate/route";
+import { runGenerationPipeline } from "../lib/generate-pipeline";
 
 type BuildMode = "Full game" | "Game map" | "Gameplay system" | "UI interface" | "Lua script";
 
