@@ -151,6 +151,40 @@ export default function Home() {
     return () => window.clearInterval(timer);
   }, [loading]);
 
+  useEffect(() => {
+    const savedRunId = window.localStorage.getItem("madara-active-run");
+    if (!savedRunId) return;
+    let active = true;
+    setLoading(true);
+    setError("");
+    const resume = async () => {
+      const deadline = Date.now() + 55 * 60 * 1000;
+      try {
+        while (active && Date.now() < deadline) {
+          const response = await fetch("/api/generate?runId=" + encodeURIComponent(savedRunId), { cache: "no-store" });
+          const data = await response.json();
+          if (!response.ok) throw new Error(data.error || "Could not resume generation.");
+          if (data.status === "COMPLETED" && data.project) {
+            window.localStorage.removeItem("madara-active-run");
+            if (active) { setProject(data.project as Project); setActiveFile(0); }
+            return;
+          }
+          if (data.error || ["FAILED", "CRASHED", "SYSTEM_FAILURE", "INTERRUPTED", "CANCELED", "EXPIRED"].includes(data.status)) {
+            window.localStorage.removeItem("madara-active-run");
+            throw new Error(data.error || "The saved generation failed. Open Trigger.dev Runs for details.");
+          }
+          await new Promise(resolve => window.setTimeout(resolve, 2500));
+        }
+      } catch (error) {
+        if (active) setError(error instanceof Error ? error.message : "Could not resume generation.");
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+    void resume();
+    return () => { active = false; };
+  }, []);
+
   async function generate() {
     if (!prompt.trim()) { setError("Write your Roblox game idea first."); return; }
     setElapsedSeconds(0); setLoading(true); setError(""); setProject(null);
@@ -163,6 +197,7 @@ export default function Home() {
       if (!startResponse.ok) throw new Error(started.error || "Could not start generation.");
       const runId = started.runId as string;
       if (!runId) throw new Error("Trigger.dev did not return a generation ID.");
+      window.localStorage.setItem("madara-active-run", runId);
 
       const deadline = Date.now() + 55 * 60 * 1000;
       while (Date.now() < deadline) {
@@ -171,10 +206,12 @@ export default function Home() {
         const statusData = await statusResponse.json();
         if (!statusResponse.ok) throw new Error(statusData.error || "Could not read generation status.");
         if (statusData.status === "COMPLETED" && statusData.project) {
+          window.localStorage.removeItem("madara-active-run");
           setProject(statusData.project as Project); setActiveFile(0);
           return;
         }
         if (statusData.error || ["FAILED", "CRASHED", "SYSTEM_FAILURE", "INTERRUPTED", "CANCELED", "EXPIRED"].includes(statusData.status)) {
+          window.localStorage.removeItem("madara-active-run");
           throw new Error(statusData.error || "Generation failed. Open Trigger.dev Runs for details.");
         }
       }
@@ -282,7 +319,7 @@ export default function Home() {
     title: "Gjenerimi po vazhdon ne sfond",
     tasks: [
       "Agjentet AI po punojne ne Trigger.dev, jashte kufirit te kerkeses Vercel",
-      "Run-i ruan gjendjen e punes edhe nese faqja rifreskohet",
+      "Run-i vazhdon ne Trigger.dev edhe nese faqja rifreskohet ose mbyllet",
       "Rezultati do te shfaqet ketu kur gjenerimi te perfundoje"
     ]
   };
