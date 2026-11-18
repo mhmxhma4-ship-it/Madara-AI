@@ -155,13 +155,30 @@ export default function Home() {
     if (!prompt.trim()) { setError("Write your Roblox game idea first."); return; }
     setElapsedSeconds(0); setLoading(true); setError(""); setProject(null);
     try {
-      const response = await fetch("/api/generate", {
+      const startResponse = await fetch("/api/generate", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ prompt: prompt.trim(), mode })
       });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "Generation failed.");
-      setProject(data as Project); setActiveFile(0);
+      const started = await startResponse.json();
+      if (!startResponse.ok) throw new Error(started.error || "Could not start generation.");
+      const runId = started.runId as string;
+      if (!runId) throw new Error("Trigger.dev did not return a generation ID.");
+
+      const deadline = Date.now() + 55 * 60 * 1000;
+      while (Date.now() < deadline) {
+        await new Promise(resolve => window.setTimeout(resolve, 2500));
+        const statusResponse = await fetch("/api/generate?runId=" + encodeURIComponent(runId), { cache: "no-store" });
+        const statusData = await statusResponse.json();
+        if (!statusResponse.ok) throw new Error(statusData.error || "Could not read generation status.");
+        if (statusData.status === "COMPLETED" && statusData.project) {
+          setProject(statusData.project as Project); setActiveFile(0);
+          return;
+        }
+        if (statusData.error || ["FAILED", "CRASHED", "SYSTEM_FAILURE", "INTERRUPTED", "CANCELED", "EXPIRED"].includes(statusData.status)) {
+          throw new Error(statusData.error || "Generation failed. Open Trigger.dev Runs for details.");
+        }
+      }
+      throw new Error("Generation is still running or exceeded the 55-minute wait. Check Trigger.dev Runs.");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not generate the project.");
     } finally { setLoading(false); }
