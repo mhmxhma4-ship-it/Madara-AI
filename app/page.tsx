@@ -275,18 +275,17 @@ export default function Home() {
   }
 
   const currentFile = project?.files[activeFile];
-  const estimatedProgress = Math.min(94, Math.max(2, Math.round((elapsedSeconds / 56) * 94)));
+  const elapsedPercent = Math.min(99, Math.round((elapsedSeconds / (55 * 60)) * 100));
   const elapsedLabel = `${String(Math.floor(elapsedSeconds / 60)).padStart(2, "0")}:${String(elapsedSeconds % 60).padStart(2, "0")}`;
-  const currentStage = elapsedSeconds < 10 ? "Game Architect" : elapsedSeconds < 24 ? "Environment Agent" : elapsedSeconds < 41 ? "Gameplay Agent" : elapsedSeconds < 50 ? "Roblox UI Agent" : "Final validation";
-  const currentWork = elapsedSeconds < 10
-    ? { title: "Po planifikohet loja", tasks: ["Po analizohet ideja dhe mekanikat kryesore", "Po percaktohen bota, progresi dhe objektivat", "Po pergatitet plani per agjentet e tjere"] }
-    : elapsedSeconds < 24
-    ? { title: "Po ndertohet planifikimi i hartes", tasks: ["Po organizohen zonat, terreni dhe objektet 3D", "Po percaktohen pozicionet dhe permasat", "Po pergatitet skena per Roblox Studio"] }
-    : elapsedSeconds < 41
-    ? { title: "Po krijohen sistemet e lojes", tasks: ["Po shkruhen skriptet Luau server dhe client", "Po lidhen eventet dhe modulet e perbashketa", "Po kontrollohen mekanikat e gameplay"] }
-    : elapsedSeconds < 50
-    ? { title: "Po rregullohet nderfaqja", tasks: ["Po krijohen HUD dhe menute e lojes", "Po organizohen butonat dhe informacioni ne ekran", "Po pershtatet UI per lojtaret"] }
-    : { title: "Po behet kontrolli final", tasks: ["Po kontrollohen strukturat dhe skedaret e projektit", "Po zbatohen kontrollet e sigurise", "Po pergatitet rezultati per shkarkim"] };
+  const currentStage = "Background generation";
+  const currentWork = {
+    title: "Gjenerimi po vazhdon ne sfond",
+    tasks: [
+      "Agjentet AI po punojne ne Trigger.dev, jashte kufirit te kerkeses Vercel",
+      "Run-i ruan gjendjen e punes edhe nese faqja rifreskohet",
+      "Rezultati do te shfaqet ketu kur gjenerimi te perfundoje"
+    ]
+  };
 
   return <main className="min-h-screen overflow-hidden">
     <header className="topbar">
@@ -311,7 +310,7 @@ export default function Home() {
         <textarea id="game-prompt" maxLength={5000} value={prompt} onChange={e => setPrompt(e.target.value)} placeholder={"Describe the Roblox game you want to create...\n\nExample: An anime simulator with 5 worlds, character companions, quests, boss fights and rebirths."}/>
         <div className="prompt-footer"><span>{prompt.length} / 5000</span><button className="generate-button" onClick={generate} disabled={loading}>{loading ? <><LoaderCircle size={16} className="spin"/> Agents working...</> : <><Sparkles size={16}/> Generate project <ArrowUp size={16}/></>}</button></div>
         {error && <p className="error-message" role="alert"><X size={15}/>{error}</p>}
-        {loading && <div className="agent-running"><div className="agent-running-title"><Workflow size={16}/> MADARA AGENT PIPELINE <span className="pipeline-live"><i/> LIVE</span></div><div className="generation-stats"><div className="generation-stat"><span><Clock3 size={14}/> KOHA LIVE</span><strong>{elapsedLabel}</strong></div><div className="generation-stat"><span><Activity size={14}/> PROGRES I VLERESUAR</span><strong>{estimatedProgress}%</strong></div></div><div className="generation-progress-track" role="progressbar" aria-label="Estimated generation progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={estimatedProgress}><div className="generation-progress-fill" style={{ width: estimatedProgress + "%" }}/></div><div className="generation-progress-caption"><span>{currentStage}</span><span>{estimatedProgress}%</span></div><div className="current-work-panel"><div className="current-work-heading"><WandSparkles size={14}/><strong>{currentWork.title}</strong><span>LIVE · VLERESIM</span></div><ul>{currentWork.tasks.map((task, index) => <li key={index}><span className="work-check"><Check size={11}/></span>{task}</li>)}</ul><p>Keto jane hapat e fazes aktuale sipas kohes. Statusi i sakte i cdo detyre nuk transmetohet ende nga serveri.</p></div><div className="agent-running-steps"><span className={elapsedSeconds < 10 ? "stage-active" : ""}><BrainCircuit size={14}/> Architect</span><span className={elapsedSeconds >= 10 && elapsedSeconds < 24 ? "stage-active" : ""}><Globe2 size={14}/> Environment</span><span className={elapsedSeconds >= 24 && elapsedSeconds < 41 ? "stage-active" : ""}><Code2 size={14}/> Gameplay</span><span className={elapsedSeconds >= 41 ? "stage-active" : ""}><Check size={14}/> UI + Review</span></div><p>Koha matet live. Perqindja eshte vleresim i progresit, jo numerim i sakte i tokenave ose puneve te perfunduara.</p></div>}
+        {loading && <div className="agent-running"><div className="agent-running-title"><Workflow size={16}/> MADARA AGENT PIPELINE <span className="pipeline-live"><i/> LIVE</span></div><div className="generation-stats"><div className="generation-stat"><span><Clock3 size={14}/> KOHA LIVE</span><strong>{elapsedLabel}</strong></div><div className="generation-stat"><span><Activity size={14}/> KOHA E LIMITIT</span><strong>{elapsedPercent}%</strong></div></div><div className="generation-progress-track" role="progressbar" aria-label="Elapsed time against the 55-minute generation window" aria-valuemin={0} aria-valuemax={100} aria-valuenow={elapsedPercent}><div className="generation-progress-fill" style={{ width: elapsedPercent + "%" }}/></div><div className="generation-progress-caption"><span>{currentStage}</span><span>{elapsedPercent}%</span></div><div className="current-work-panel"><div className="current-work-heading"><WandSparkles size={14}/><strong>{currentWork.title}</strong><span>STATUS</span></div><ul>{currentWork.tasks.map((task, index) => <li key={index}><span className="work-check"><Check size={11}/></span>{task}</li>)}</ul><p>Statusi i detajuar i secilit agjent nuk transmetohet ne nderfaqe. Run-i ruhet ne Trigger.dev.</p></div><div className="agent-running-steps"><span className={elapsedSeconds < 10 ? "stage-active" : ""}><BrainCircuit size={14}/> Architect</span><span className={elapsedSeconds >= 10 && elapsedSeconds < 24 ? "stage-active" : ""}><Globe2 size={14}/> Environment</span><span className={elapsedSeconds >= 24 && elapsedSeconds < 41 ? "stage-active" : ""}><Code2 size={14}/> Gameplay</span><span className={elapsedSeconds >= 41 ? "stage-active" : ""}><Check size={14}/> UI + Review</span></div><p>Koha tregon sa nga dritarja maksimale 55-minuteshe ka kaluar; nuk eshte matje e progresit te brendshem te agjenteve.</p></div>}
         <div className="examples"><span>TRY AN IDEA</span>{examples.map(x => <button key={x} onClick={() => { setPrompt(x); setError(""); }}>{x}<ArrowUp size={12} className="rotate-45"/></button>)}</div>
       </div>
     </section>
