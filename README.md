@@ -10,6 +10,7 @@ Mobile-first AI Roblox game builder using Next.js 15, TypeScript and Tailwind CS
 - Structured Luau project files and Roblox Studio setup instructions.
 - Code preview, copy and plain-text bundle download.
 - Provider secrets stay on the server.
+- Best-effort per-IP generation throttling and request-size limits protect the public generation endpoint.
 
 ## Required Vercel environment variables
 - OPENAI_API_KEY — API key from an OpenAI-compatible provider.
