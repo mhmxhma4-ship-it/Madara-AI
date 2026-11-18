@@ -170,21 +170,25 @@ export default function Home() {
       manifest.push({ originalPath: file.path, zipPath, kind: file.kind });
     }
 
+    const tree: Record<string, unknown> = { $className: "DataModel" };
+    for (const [service, folder] of Object.entries(sourceFolders)) {
+      if (Object.keys(archive).some(path => path.startsWith(folder + "/"))) {
+        tree[service] = { $path: folder };
+      }
+    }
+    const starterPlayerTree: Record<string, unknown> = { $className: "StarterPlayer" };
+    if (Object.keys(archive).some(path => path.startsWith("src/client/"))) {
+      starterPlayerTree.StarterPlayerScripts = { $path: "src/client" };
+    }
+    if (Object.keys(archive).some(path => path.startsWith("src/character/"))) {
+      starterPlayerTree.StarterCharacterScripts = { $path: "src/character" };
+    }
+    if (Object.keys(starterPlayerTree).length > 1) {
+      tree.StarterPlayer = starterPlayerTree;
+    }
     const projectConfig = {
       name: project.projectName.toLowerCase().replace(/[^a-z0-9]+/g, "-") || "madara-project",
-      tree: {
-        $className: "DataModel",
-        Workspace: { $path: "src/workspace" },
-        ServerScriptService: { $path: "src/server" },
-        ReplicatedStorage: { $path: "src/shared" },
-        ServerStorage: { $path: "src/serverStorage" },
-        StarterGui: { $path: "src/starterGui" },
-        StarterPlayer: {
-          $className: "StarterPlayer",
-          StarterPlayerScripts: { $path: "src/client" },
-          StarterCharacterScripts: { $path: "src/character" }
-        }
-      }
+      tree
     };
 
     archive["default.project.json"] = strToU8(JSON.stringify(projectConfig, null, 2));
