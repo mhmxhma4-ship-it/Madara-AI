@@ -1,66 +1,22 @@
 "use client";
-
 import { useState } from "react";
-import { ArrowUp, Bot, Check, ChevronDown, Code2, Gamepad2, Github, Layers3, Menu, Sparkles, WandSparkles } from "lucide-react";
-
-const examples = [
-  "Create a cute pink Hello Kitty-inspired obby tower",
-  "Build an anime simulator with 5 worlds and rebirths",
-  "Make a romantic hangout map with a sunset and glowing stars"
-];
-
-export default function Home() {
-  const [prompt, setPrompt] = useState("");
-  const [mode, setMode] = useState("Full game");
-  const [notice, setNotice] = useState("");
-
-  function startBuild() {
-    if (!prompt.trim()) {
-      setNotice("Write your game idea first.");
-      return;
-    }
-    setNotice("Your idea is ready. AI generation will be connected in the next build step.");
-  }
-
-  return (
-    <main className="min-h-screen overflow-hidden">
-      <header className="topbar">
-        <a className="brand" href="#"><span className="brand-mark"><WandSparkles size={19} /></span><span>madara<span className="brand-ai">.ai</span></span></a>
-        <nav className="desktop-nav"><a href="#builder">Builder</a><a href="#how-it-works">How it works</a><a href="https://github.com/mhmxhma4-ship-it/Madara-AI" target="_blank" rel="noreferrer">GitHub</a></nav>
-        <a className="top-cta" href="#builder">Start creating <ArrowUp size={15} className="rotate-45" /></a>
-        <button className="mobile-menu" aria-label="Menu"><Menu size={21} /></button>
-      </header>
-
-      <section className="hero">
-        <div className="hero-glow glow-one" /><div className="hero-glow glow-two" />
-        <div className="eyebrow"><span className="pulse-dot" /> YOUR ROBLOX CREATION STUDIO</div>
-        <h1>Imagine it.<br /><span className="gradient-text">Build it with AI.</span></h1>
-        <p className="hero-copy">Turn a simple idea into a Roblox game. Describe your world, mechanics, and style — Madara AI will help bring it to life.</p>
-        <div className="hero-tags"><span><Sparkles size={14} /> AI powered</span><span><Gamepad2 size={14} /> Made for Roblox</span><span><Layers3 size={14} /> Mobile friendly</span></div>
-      </section>
-
-      <section className="builder-wrap" id="builder">
-        <div className="builder-card">
-          <div className="builder-heading"><div><div className="section-kicker">THE CREATION LAB</div><h2>What are we building?</h2></div><span className="beta-pill">EARLY ACCESS</span></div>
-          <div className="mode-row"><span className="mode-label">CREATE</span><div className="mode-select"><Gamepad2 size={15} /><select value={mode} onChange={(event) => setMode(event.target.value)}><option>Full game</option><option>Game map</option><option>Gameplay system</option><option>UI interface</option><option>Lua script</option></select><ChevronDown size={14} /></div></div>
-          <label className="sr-only" htmlFor="game-prompt">Describe your Roblox game</label>
-          <textarea id="game-prompt" value={prompt} onChange={(event) => { setPrompt(event.target.value); setNotice(""); }} placeholder="Describe the Roblox game you want to create...&#10;&#10;Example: A magical anime simulator with 5 worlds, character companions, quests, boss fights and rebirths." />
-          <div className="prompt-footer"><span>{prompt.length} / 5000</span><button className="generate-button" onClick={startBuild}> <Sparkles size={16} /> Generate game <ArrowUp size={16} /></button></div>
-          {notice && <p className="notice" role="status">{notice}</p>}
-          <div className="examples"><span>TRY AN IDEA</span>{examples.map((example) => <button key={example} onClick={() => { setPrompt(example); setNotice(""); }}>{example}<ArrowUp size={12} className="rotate-45" /></button>)}</div>
-        </div>
-      </section>
-
-      <section className="steps" id="how-it-works">
-        <div className="section-kicker">FROM IDEA TO EXPERIENCE</div><h2>Your game starts here.</h2>
-        <div className="steps-grid">
-          <article className="step-card"><div className="step-icon"><Bot /></div><span>01 / DESCRIBE</span><h3>Tell us your idea</h3><p>Explain the game, its world, mechanics, and the feeling you want players to have.</p></article>
-          <article className="step-card"><div className="step-icon"><Code2 /></div><span>02 / GENERATE</span><h3>AI builds the pieces</h3><p>Generate Roblox Lua scripts, systems, and structured project files from your prompt.</p></article>
-          <article className="step-card"><div className="step-icon"><Gamepad2 /></div><span>03 / PUBLISH</span><h3>Bring it to Roblox</h3><p>Prepare your project for Roblox and connect publishing securely when your account is configured.</p></article>
-        </div>
-      </section>
-
-      <footer><a className="brand" href="#"><span className="brand-mark"><WandSparkles size={17} /></span><span>madara<span className="brand-ai">.ai</span></span></a><span>Built for creators, powered by imagination.</span><a href="https://github.com/mhmxhma4-ship-it/Madara-AI" target="_blank" rel="noreferrer"><Github size={15} /> Source code</a></footer>
-    </main>
-  );
+import { ArrowUp, Bot, Check, Code2, Copy, Download, ExternalLink, Gamepad2, Github, Layers3, LoaderCircle, Sparkles, WandSparkles, X } from "lucide-react";
+type GeneratedFile={path:string;kind:string;code:string};
+type Project={projectName:string;summary:string;instructions:string[];files:GeneratedFile[]};
+const examples=["Create a cute pink obby tower with 30 stages, checkpoints, wins and a rebirth shop.","Build an anime simulator with 5 worlds, companion followers, training zones, bosses and rebirths.","Make a romantic hangout map with a sunset, glowing stars, a heart garden and interactive places."];
+const modes=["Full game","Game map","Gameplay system","UI interface","Lua script"];
+function downloadText(filename:string,content:string){const blob=new Blob([content],{type:"text/plain;charset=utf-8"});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download=filename;a.click();URL.revokeObjectURL(url);}
+export default function Home(){
+ const [prompt,setPrompt]=useState("");const [mode,setMode]=useState("Full game");const [loading,setLoading]=useState(false);const [error,setError]=useState("");const [project,setProject]=useState<Project|null>(null);const [activeFile,setActiveFile]=useState(0);const [copied,setCopied]=useState(false);
+ async function generate(){if(!prompt.trim()){setError("Write your Roblox game idea first.");return;}setLoading(true);setError("");setProject(null);try{const response=await fetch("/api/generate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({prompt:prompt.trim(),mode})});const data=await response.json();if(!response.ok)throw new Error(data.error||"Generation failed.");setProject(data as Project);setActiveFile(0);}catch(e){setError(e instanceof Error?e.message:"Could not generate the project.");}finally{setLoading(false);}}
+ async function copyCode(){if(!project?.files[activeFile])return;await navigator.clipboard.writeText(project.files[activeFile].code);setCopied(true);window.setTimeout(()=>setCopied(false),1800);}
+ function downloadProject(){if(!project)return;const bundle=project.files.map(f=>`-- FILE: ${f.path}\n${f.code}`).join("\n\n");downloadText(`${project.projectName.toLowerCase().replace(/[^a-z0-9]+/g,"-")||"madara-project"}.txt`,`-- Generated by Madara AI\n-- Import each script into the matching Roblox Studio location.\n\n${bundle}`);}
+ const currentFile=project?.files[activeFile];
+ return <main className="min-h-screen overflow-hidden">
+ <header className="topbar"><a className="brand" href="#"><span className="brand-mark"><WandSparkles size={19}/></span><span>madara<span className="brand-ai">.ai</span></span></a><nav className="desktop-nav"><a href="#builder">Builder</a><a href="#how-it-works">How it works</a><a href="https://github.com/mhmxhma4-ship-it/Madara-AI" target="_blank" rel="noreferrer">GitHub</a></nav><a className="top-cta" href="#builder">Start creating <ArrowUp size={15} className="rotate-45"/></a></header>
+ <section className="hero"><div className="hero-glow glow-one"/><div className="hero-glow glow-two"/><div className="eyebrow"><span className="pulse-dot"/> AI ROBLOX GAME STUDIO</div><h1>Imagine it.<br/><span className="gradient-text">Build it with AI.</span></h1><p className="hero-copy">Describe your Roblox game and generate real Luau scripts with setup instructions. Built to work beautifully on your phone.</p><div className="hero-tags"><span><Sparkles size={14}/> AI generation</span><span><Gamepad2 size={14}/> Roblox Luau</span><span><Layers3 size={14}/> Mobile friendly</span></div></section>
+ <section className="builder-wrap" id="builder"><div className="builder-card"><div className="builder-heading"><div><div className="section-kicker">THE CREATION LAB</div><h2>What are we building?</h2></div><span className="beta-pill">AI BUILDER</span></div><div className="mode-row"><span className="mode-label">CREATE</span><div className="mode-select"><Gamepad2 size={15}/><select value={mode} onChange={e=>setMode(e.target.value)}>{modes.map(m=><option key={m}>{m}</option>)}</select></div></div><label className="sr-only" htmlFor="game-prompt">Describe your Roblox game</label><textarea id="game-prompt" maxLength={5000} value={prompt} onChange={e=>setPrompt(e.target.value)} placeholder={"Describe the Roblox game you want to create...\n\nExample: An anime simulator with 5 worlds, character companions, quests, boss fights and rebirths."}/><div className="prompt-footer"><span>{prompt.length} / 5000</span><button className="generate-button" onClick={generate} disabled={loading}>{loading?<><LoaderCircle size={16} className="spin"/> Generating...</>:<><Sparkles size={16}/> Generate project <ArrowUp size={16}/></>}</button></div>{error&&<p className="error-message" role="alert"><X size={15}/>{error}</p>}<div className="examples"><span>TRY AN IDEA</span>{examples.map(x=><button key={x} onClick={()=>{setPrompt(x);setError("");}}>{x}<ArrowUp size={12} className="rotate-45"/></button>)}</div></div></section>
+ {project&&<section className="result-wrap" aria-live="polite"><div className="result-heading"><div><div className="section-kicker">YOUR GENERATED PROJECT</div><h2>{project.projectName}</h2><p>{project.summary}</p></div><button className="download-button" onClick={downloadProject}><Download size={16}/> Download scripts</button></div><div className="result-card"><aside className="file-list"><div className="file-list-title"><Layers3 size={15}/> PROJECT FILES <span>{project.files.length}</span></div>{project.files.map((f,i)=><button key={f.path} className={activeFile===i?"file-tab active":"file-tab"} onClick={()=>setActiveFile(i)}><Code2 size={14}/><span>{f.path.split("/").pop()}</span></button>)}</aside><div className="code-panel"><div className="code-toolbar"><span>{currentFile?.path}</span><button onClick={copyCode}>{copied?<Check size={14}/>:<Copy size={14}/>} {copied?"Copied":"Copy"}</button></div><pre><code>{currentFile?.code}</code></pre></div></div>{project.instructions.length>0&&<div className="instructions"><h3><Check size={17}/> Setup in Roblox Studio</h3><ol>{project.instructions.map((x,i)=><li key={i}>{x}</li>)}</ol></div>}<p className="publish-note">Madara AI generates project scripts and setup steps. Review and test them in Roblox Studio before publishing. Direct publishing requires a valid Roblox place file and authorized Open Cloud credentials.</p></section>}
+ <section className="steps" id="how-it-works"><div className="section-kicker">FROM IDEA TO EXPERIENCE</div><h2>Your game starts here.</h2><div className="steps-grid"><article className="step-card"><div className="step-icon"><Bot/></div><span>01 / DESCRIBE</span><h3>Tell us your idea</h3><p>Describe the world, mechanics, progression and style you want.</p></article><article className="step-card"><div className="step-icon"><Code2/></div><span>02 / GENERATE</span><h3>Get real Luau scripts</h3><p>Madara AI creates Roblox scripts and explains where each file belongs.</p></article><article className="step-card"><div className="step-icon"><Gamepad2/></div><span>03 / TEST & PUBLISH</span><h3>Finish in Roblox</h3><p>Review and test the generated project in Roblox Studio, then publish your experience.</p></article></div></section>
+ <footer><a className="brand" href="#"><span className="brand-mark"><WandSparkles size={17}/></span><span>madara<span className="brand-ai">.ai</span></span></a><span>Built for creators, powered by imagination.</span><a href="https://github.com/mhmxhma4-ship-it/Madara-AI" target="_blank" rel="noreferrer"><Github size={15}/> Source code <ExternalLink size={12}/></a></footer></main>;
 }
