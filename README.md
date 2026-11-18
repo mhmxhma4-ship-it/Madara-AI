@@ -29,3 +29,21 @@ Direct Roblox publishing requires a valid place file and authorized Open Cloud c
 
 ## Safety
 Generated scripts are untrusted output. Review before running. Never use executor scripts, unknown asset requires or unreviewed third-party modules.
+
+
+## Publish Now (Roblox Open Cloud)
+
+Madara AI can publish a real Roblox place file to an existing experience using Roblox's official Place Publishing API.
+
+1. In Creator Dashboard, create an API key with **universe-places → Write** permission for the target experience.
+2. Copy the target experience's **Universe ID** and the target place's **Place ID**.
+3. Export/save a valid `.rbxlx` or `.rbxl` place file from Roblox Studio.
+4. Open Madara AI's **Publish Now** section, enter the API key and IDs, select the place file, and confirm publishing.
+
+The publisher accepts place files up to 10 MB. The API key is used for the request and is not saved by Madara AI. Do not share it with anyone.
+
+**Important:** Publishing replaces the selected place's current published content with the uploaded place file. Keep a backup before publishing. Roblox retains place version history, but this app does not currently create or restore backups automatically.
+
+The current AI generator returns Luau script bundles, not complete `.rbxlx`/`.rbxl` place files. Insert and test the generated scripts in Studio, then export the resulting place file before using Publish Now. The publisher does not yet convert the script bundle into a complete place automatically.
+
+Official guide: https://create.roblox.com/docs/cloud/guides/usage-place-publishing
