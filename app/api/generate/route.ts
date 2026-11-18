@@ -281,29 +281,45 @@ export async function POST(request: NextRequest) {
       try {
         return parseJson(generatedContent);
       } catch (parseError) {
-        // A valid HTTP response can still contain truncated or malformed JSON.
-        // Give the same agent one repair pass instead of failing the whole project.
+        // Recover malformed/truncated model output with a compact repair request.
+        // Repair requests also respect Groq's TPM cooldown instead of failing immediately.
+        const originalText = typeof generatedContent === "string"
+          ? generatedContent.slice(0, 18000)
+          : JSON.stringify(generatedContent ?? "");
         const repairPayload: Record<string, unknown> = {
           ...payload,
           temperature: 0,
-          max_completion_tokens: Math.min(maxTokens, 6000),
+          max_completion_tokens: Math.max(1800, Math.min(6000, maxTokens)),
           messages: [
             {
               role: "system",
-              content: `You are a JSON repair worker for the ${agentName}. Convert the supplied response into exactly one valid JSON object matching the original requested schema. Preserve all useful content and complete Luau source code. Do not add markdown, explanations, comments outside JSON, or trailing commas. If a code string contains quotes or newlines, escape them correctly.`
+              content: `You are a strict JSON recovery engine for the ${agentName}. The input may be truncated or contain invalid escaping. Return ONE syntactically valid JSON object matching the requested schema. Preserve the original meaning and all useful complete Luau code. If content is truncated, finish the incomplete JSON/code conservatively rather than inventing unrelated features. Escape every newline and quote inside JSON strings. No markdown fences, no commentary, no trailing commas. The output must be parseable by JSON.parse.`
             },
             {
               role: "user",
-              content: `Original task: ${instructions}\n\nOriginal response to repair:\n${typeof generatedContent === "string" ? generatedContent.slice(0, 24000) : String(generatedContent)}\n\nReturn only the repaired JSON object.`
+              content: `Required JSON schema/task:\n${instructions.slice(0, 7000)}\n\nMalformed model output:\n${originalText}\n\nRepair it now. Return only the complete JSON object.`
             }
           ]
         };
-        const repairedResponse = await sendRequest(repairPayload);
+        let repairedResponse = await sendRequest(repairPayload);
+        if (repairedResponse.status === 429) {
+          const retryDetail = await repairedResponse.text();
+          const retryMatch = retryDetail.match(/try again in\\s+([0-9.]+)s/i);
+          const retryHeader = Number(repairedResponse.headers.get("retry-after") || 0);
+          const retryBody = retryMatch ? Number(retryMatch[1]) : 0;
+          const cooldown = Math.min(35000, Math.max(1000, retryHeader * 1000, retryBody * 1000) + 750);
+          await new Promise(resolve => setTimeout(resolve, cooldown));
+          repairedResponse = await sendRequest(repairPayload);
+        }
         if (!repairedResponse.ok) {
-          throw parseError;
+          throw new Error(`${agentName}: output was malformed and automatic JSON repair failed. Please generate again.`);
         }
         const repaired = await repairedResponse.json();
-        return parseJson(repaired.choices?.[0]?.message?.content);
+        try {
+          return parseJson(repaired.choices?.[0]?.message?.content);
+        } catch {
+          throw new Error(`${agentName}: output remained invalid after automatic JSON repair. Please generate again.`);
+        }
       }
     }
 
