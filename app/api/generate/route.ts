@@ -177,6 +177,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "AI is not connected. Add at least one provider key in Vercel and redeploy." }, { status: 503 });
     }
 
+    // Keep the whole multi-agent pipeline inside Vercel's function window.
+    // Individual agents and provider fallbacks share one hard deadline.
+    const generationDeadline = Date.now() + 53_000;
+
     // Once Groq reports its daily token quota is exhausted, bypass it for every
     // remaining agent in this generation instead of repeatedly hitting a dead quota.
     let groqDailyLimitReached = false;
@@ -188,6 +192,7 @@ export async function POST(request: NextRequest) {
       extraContext = "",
       timeoutMs = 16000
     ): Promise<JsonObject> {
+      const agentDeadline = Math.min(generationDeadline, Date.now() + timeoutMs);
       const payload: Record<string, unknown> = {
         model,
         temperature: 0.2,
@@ -207,7 +212,10 @@ export async function POST(request: NextRequest) {
 
       const sendRequest = async (requestPayload: Record<string, unknown>): Promise<Response> => {
         const messages = Array.isArray(requestPayload.messages) ? requestPayload.messages as Array<{ role?: string; content?: string }> : [];
-        const requestOptions = () => ({ signal: AbortSignal.timeout(timeoutMs), cache: "no-store" as RequestCache });
+        const requestOptions = () => ({
+          signal: AbortSignal.timeout(Math.max(1, Math.min(6500, agentDeadline - Date.now()))),
+          cache: "no-store" as RequestCache
+        });
         const attempts: Array<{ name: string; run: () => Promise<Response> }> = [];
 
         if (apiKey && !groqDailyLimitReached) {
@@ -283,6 +291,7 @@ export async function POST(request: NextRequest) {
         let lastResponse: Response | null = null;
         const failures: string[] = [];
         for (const attempt of attempts) {
+          if (Date.now() >= agentDeadline - 250) break;
           try {
             let response: Response | null = null;
             // Gemini can temporarily return 503 during demand spikes.
@@ -296,9 +305,9 @@ export async function POST(request: NextRequest) {
                 await new Promise(resolve => setTimeout(resolve, 900));
                 continue;
               }
-              if (response.status !== 503 || providerTry + 1 >= maxAttempts) break;
+              if (response.status !== 503 || providerTry + 1 >= maxAttempts || Date.now() >= agentDeadline - 1300) break;
               await response.text();
-              await new Promise(resolve => setTimeout(resolve, 900));
+              await new Promise(resolve => setTimeout(resolve, Math.min(900, Math.max(0, agentDeadline - Date.now() - 300))));
             }
             if (!response) throw new Error("Provider did not return a response.");
             if (response.ok) return response;
@@ -319,7 +328,7 @@ export async function POST(request: NextRequest) {
             lastResponse = Response.json({ error: { message: failures[failures.length - 1] } }, { status: 503 });
           }
         }
-        return lastResponse || Response.json({ error: { message: "No AI provider is configured." } }, { status: 503 });
+        return lastResponse || Response.json({ error: { message: Date.now() >= agentDeadline ? "Generation time budget exhausted for this agent." : "No AI provider is configured." } }, { status: Date.now() >= agentDeadline ? 504 : 503 });
       };
 
       let response = await sendRequest(payload);
@@ -333,25 +342,9 @@ export async function POST(request: NextRequest) {
         return detail;
       };
 
-      // Groq free/on-demand TPM windows can reject parallel specialist agents.
-      // Wait for the provider's stated cooldown and retry once with a smaller output budget.
-      if (response.status === 429) {
-        await readResponseBody();
-        const isDailyQuota = /tokens per day|token[s]? per day|\bTPD\b/i.test(detail);
-        const retryMatch = detail.match(/try again in\s+([0-9.]+)s/i);
-        const headerDelay = Number(response.headers.get("retry-after") || 0);
-        const bodyDelay = retryMatch ? Number(retryMatch[1]) : 0;
-        const waitMs = Math.min(35000, Math.max(1000, headerDelay * 1000, bodyDelay * 1000) + 750);
-        if (!isDailyQuota) await new Promise(resolve => setTimeout(resolve, waitMs));
-        const retryPayload = {
-          ...payload,
-          max_completion_tokens: Math.max(900, Math.floor(maxTokens * 0.65)),
-          temperature: 0.1
-        };
-        response = await sendRequest(retryPayload);
-        responseBodyRead = false;
-        if (!response.ok) await readResponseBody();
-      }
+      // sendRequest already tried every configured provider. Do not sleep through
+      // a provider cooldown here: that can consume the entire serverless request.
+      // Surface the quota error and let the user retry after the provider resets.
 
       // Groq can reject constrained JSON generation for some GPT-OSS outputs.
       // Retry once in ordinary chat mode while keeping the strict JSON instruction.
@@ -360,7 +353,7 @@ export async function POST(request: NextRequest) {
         const jsonValidationFailure =
           response.status === 400 &&
           /failed to validate json|failed_generation|json mode|response_format/i.test(detail);
-        if (jsonValidationFailure) {
+        if (jsonValidationFailure && Date.now() < agentDeadline - 2500) {
           const retryPayload = { ...payload };
           delete retryPayload.response_format;
           retryPayload.temperature = 0.1;
@@ -420,16 +413,10 @@ export async function POST(request: NextRequest) {
             }
           ]
         };
-        let repairedResponse = await sendRequest(repairPayload);
-        if (repairedResponse.status === 429) {
-          const retryDetail = await repairedResponse.text();
-          const retryMatch = retryDetail.match(/try again in\s+([0-9.]+)s/i);
-          const retryHeader = Number(repairedResponse.headers.get("retry-after") || 0);
-          const retryBody = retryMatch ? Number(retryMatch[1]) : 0;
-          const cooldown = Math.min(35000, Math.max(1000, retryHeader * 1000, retryBody * 1000) + 750);
-          await new Promise(resolve => setTimeout(resolve, cooldown));
-          repairedResponse = await sendRequest(repairPayload);
+        if (Date.now() >= agentDeadline - 2500) {
+          throw new Error(`${agentName}: response was malformed and there was not enough time left for safe JSON repair. Please retry.`);
         }
+        const repairedResponse = await sendRequest(repairPayload);
         if (!repairedResponse.ok) {
           throw new Error(`${agentName}: output was malformed and automatic JSON repair failed. Please generate again.`);
         }
@@ -452,7 +439,7 @@ export async function POST(request: NextRequest) {
       Define the core gameplay loop, player goals, progression, rewards, failure/retry loop and multiplayer assumptions. Do not invent unrelated themes. Define a premium realistic 3D art direction with believable proportions, natural colors, realistic materials, lighting and weather. Do not choose Minecraft, voxel, blocky or low-poly aesthetics unless explicitly requested.`,
       2200,
       "",
-      12000
+      9000
     );
 
     const blueprintContext = JSON.stringify({
@@ -476,7 +463,7 @@ export async function POST(request: NextRequest) {
         parentPath is relative to Workspace, such as "World/SpawnArea". className Part or SpawnLocation. Use studs and believable scale. Avoid floating geometry. Every file must be complete Luau source, never pseudocode.`,
       3400,
       "",
-      22000
+      11000
     );
 
     const gameplay = await askAgent(
@@ -486,12 +473,12 @@ export async function POST(request: NextRequest) {
         THIS IS A FULL GAME BUILD, NOT A DEMO OR PLAN. Implement the core gameplay loop described by the user, not generic placeholder code. Include all essential dependencies and a clear server/client split. For a multiplayer game, implement server-authoritative player/session state and safe handling when players join/leave. For progression games, implement the actual currency/reward/progression loop. For stage games, implement checkpoints, completion and respawn. For combat games, implement validated damage, cooldowns and enemy/boss behavior. Use RemoteEvents created safely by the server and validate every client request. Use DataStoreService with pcall, retries or graceful defaults; the game must still run if saving is unavailable in Studio. Use correct Roblox service paths and full scripts. Do not create UI; the Interface Agent owns UI. Do not duplicate static map parts from buildPlan.`,
       3800,
       "",
-      22000
+      14000
     );
 
     let interfaceAgent: JsonObject = { files: [], gameplayNotes: [] };
     let interfaceAgentError = "";
-    if (mode === "Full game" || mode === "UI interface") {
+    if ((mode === "Full game" || mode === "UI interface") && Date.now() < generationDeadline - 8500) {
       try {
         interfaceAgent = await askAgent(
           "Roblox UI Agent",
@@ -500,7 +487,7 @@ export async function POST(request: NextRequest) {
             For Full game, provide a polished premium mobile-friendly StarterPlayer/StarterPlayerScripts/HUD.client.lua LocalScript that creates its ScreenGui at runtime, scales for touch and desktop, displays the actual game stats/progression, and connects only to RemoteEvents/RemoteFunctions that are part of the blueprint. Use modern high-quality game HUD design, clean typography, restrained colors, subtle gradients and strokes, consistent spacing and responsive controls; never use childish blocky/Minecraft-style UI unless requested. If no remotes are specified, coordinate names with the Gameplay Agent using conventional names and document them in gameplayNotes. Include clear feedback, readable buttons and safe touch input. Do not implement server-authoritative game logic in the client. For UI interface mode, focus on the requested UI and its client behavior. Return full runnable Luau, not pseudocode.`,
           1500,
           "",
-          18000
+          8000
         );
       } catch (error) {
         // UI is an optional specialist: a provider TPM limit must not discard
@@ -541,6 +528,7 @@ export async function POST(request: NextRequest) {
     let reviewWarnings: string[] = [];
     let reviewerCompleted = false;
     try {
+      if (Date.now() >= generationDeadline - 6500) throw new Error("Not enough generation time remains for the optional reviewer.");
       const review = await askAgent(
         "Luau Code Reviewer",
         `Review the complete generated project and 3D scene plan for Roblox Luau correctness, missing dependencies, incorrect service paths, server/client boundary mistakes, unsafe remote handling, DataStore error handling, floating or badly scaled map geometry and obvious logic defects. Return JSON with:
@@ -548,7 +536,7 @@ export async function POST(request: NextRequest) {
         IMPORTANT: Return a corrected file only when you made a real improvement. Preserve the exact path and kind for every corrected file. Do not rewrite working code just for style. Do not add unrelated systems. If a file is already sound, omit it from files. Never say code was executed or tested.`,
         3000,
         JSON.stringify({ blueprint: architect, files, environmentPlan }),
-        14000
+        6000
       );
       const corrected = validFiles(review.files, 8);
       for (const fix of corrected) {
