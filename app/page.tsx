@@ -289,10 +289,11 @@ export default function Home() {
         <div className="blueprint-columns">{(project.worldPlan?.length ?? 0) > 0 && <div><h3><Globe2 size={15}/> World plan</h3><ul>{project.worldPlan?.map((x,i) => <li key={i}>{x}</li>)}</ul></div>}{(project.systemsPlan?.length ?? 0) > 0 && <div><h3><Workflow size={15}/> Gameplay systems</h3><ul>{project.systemsPlan?.map((x,i) => <li key={i}>{x}</li>)}</ul></div>}</div>
       </div>}
 
-      {project.files.length > 0 ? <div className="result-card">
+      {project.files.length === 0 && <p className="no-script-note">This build contains a 3D scene plan and does not need separate Luau files. Use the Madara AI Studio Connector to create the map in Workspace.</p>}
+      {project.files.length > 0 && <div className="result-card">
         <aside className="file-list"><div className="file-list-title"><Layers3 size={15}/> PROJECT FILES <span>{project.files.length}</span></div>{project.files.map((f,i) => <button key={f.path} className={activeFile === i ? "file-tab active" : "file-tab"} onClick={() => setActiveFile(i)}><Code2 size={14}/><span>{f.path.split("/").pop()}</span></button>)}</aside>
         <div className="code-panel"><div className="code-toolbar"><span>{currentFile?.path}</span><button onClick={copyCode}>{copied ? <Check size={14}/> : <Copy size={14}/>} {copied ? "Copied" : "Copy"}</button></div><pre><code>{currentFile?.code}</code></pre></div>
-      </div> : <p className="no-script-note">This build contains a 3D scene plan and does not need separate Luau files. Use the Madara AI Studio Connector to create the map in Workspace.</p>}
+      </div>}
       {project.instructions.length > 0 && <div className="instructions"><h3><Check size={17}/> Setup in Roblox Studio</h3><ol>{project.instructions.map((x,i) => <li key={i}>{x}</li>)}</ol></div>}
       {project.agentNotes && project.agentNotes.length > 0 && <div className="instructions"><h3><Sparkles size={17}/> Agent build notes</h3><ul>{project.agentNotes.map((x,i) => <li key={i}>{x}</li>)}</ul></div>}
       <p className="publish-note">Madara AI uses separate planning, environment, gameplay and code-review agents. Scripts and map geometry still need testing in Roblox Studio. The ZIP is a Rojo source package, not a compiled Roblox place file.</p>
