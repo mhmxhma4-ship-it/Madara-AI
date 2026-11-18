@@ -24,6 +24,61 @@ function downloadText(filename: string, content: string) {
   a.href = url; a.download = filename; a.click(); URL.revokeObjectURL(url);
 }
 
+
+function PublishNowPanel() {
+  const [apiKey, setApiKey] = useState("");
+  const [universeId, setUniverseId] = useState("");
+  const [placeId, setPlaceId] = useState("");
+  const [placeFile, setPlaceFile] = useState<File | null>(null);
+  const [publishing, setPublishing] = useState(false);
+  const [status, setStatus] = useState("");
+  const [failed, setFailed] = useState(false);
+
+  async function publishNow() {
+    if (!apiKey || !universeId || !placeId || !placeFile) {
+      setFailed(true); setStatus("Complete all fields and select your Roblox place file."); return;
+    }
+    const confirmed = window.confirm("Publish this place file to the selected Roblox experience? This creates a new published version and updates the live game.");
+    if (!confirmed) return;
+    setPublishing(true); setStatus(""); setFailed(false);
+    try {
+      const form = new FormData();
+      form.append("apiKey", apiKey);
+      form.append("universeId", universeId.trim());
+      form.append("placeId", placeId.trim());
+      form.append("placeFile", placeFile);
+      const response = await fetch("/api/roblox/publish", { method: "POST", body: form });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Publishing failed.");
+      setStatus(data.versionNumber ? `Published successfully. Roblox version: ${data.versionNumber}` : "Roblox accepted the place file for publishing.");
+      setApiKey("");
+    } catch (error) {
+      setFailed(true);
+      setStatus(error instanceof Error ? error.message : "Could not publish this place.");
+    } finally { setPublishing(false); }
+  }
+
+  return <section className="publish-panel" id="publish-now">
+    <div className="section-kicker">ROBLOX OPEN CLOUD</div>
+    <h2>Publish Now</h2>
+    <p>Replace the content of an existing Roblox place with a new .rbxlx or .rbxl version.</p>
+    <div className="publish-warning">Publishing updates the selected live place. Save a backup version in Roblox Studio before continuing.</div>
+    <div className="publish-fields">
+      <label>Roblox API Key<input type="password" autoComplete="off" value={apiKey} onChange={e => setApiKey(e.target.value)} placeholder="Paste your Open Cloud API key" /></label>
+      <div className="publish-id-row">
+        <label>Universe ID<input inputMode="numeric" value={universeId} onChange={e => setUniverseId(e.target.value)} placeholder="Experience Universe ID" /></label>
+        <label>Place ID<input inputMode="numeric" value={placeId} onChange={e => setPlaceId(e.target.value)} placeholder="Place ID" /></label>
+      </div>
+      <label>New Roblox place file<input type="file" accept=".rbxlx,.rbxl" onChange={e => setPlaceFile(e.target.files?.[0] || null)} /></label>
+      {placeFile && <span className="publish-file-name">{placeFile.name} · {(placeFile.size / 1024 / 1024).toFixed(2)} MB</span>}
+      <button className="generate-button publish-submit" onClick={publishNow} disabled={publishing}>{publishing ? <><LoaderCircle size={16} className="spin"/> Publishing...</> : <>Publish Now <ArrowUp size={16}/></>}</button>
+      {status && <p className={failed ? "publish-status error" : "publish-status success"} role="status">{status}</p>}
+    </div>
+    <p className="publish-security">Your API key is sent only for this request and is not saved by Madara AI. Use a key limited to the target experience with <strong>universe-places: Write</strong> permission. Current generator output is a script bundle; export a real .rbxlx/.rbxl from Studio before using this publisher.</p>
+    <a className="publish-doc-link" href="https://create.roblox.com/docs/cloud/guides/usage-place-publishing" target="_blank" rel="noreferrer">Roblox publishing setup guide <ExternalLink size={13}/></a>
+  </section>;
+}
+
 export default function Home() {
   const [prompt, setPrompt] = useState("");
   const [mode, setMode] = useState("Full game");
@@ -111,7 +166,7 @@ export default function Home() {
       <p className="publish-note">Madara AI now uses separate AI agents for planning, environment and gameplay. Scripts still need review and testing in Roblox Studio. This export is a script bundle, not yet a Roblox place file.</p>
     </section>}
 
-    <section className="steps" id="how-it-works">
+    <PublishNowPanel />\n\n    <section className="steps" id="how-it-works">
       <div className="section-kicker">FROM IDEA TO EXPERIENCE</div><h2>Your AI team starts here.</h2>
       <div className="steps-grid">
         <article className="step-card"><div className="step-icon"><BrainCircuit/></div><span>01 / ARCHITECT</span><h3>Plan the experience</h3><p>The architect defines the game loop, worlds, progression and systems.</p></article>
