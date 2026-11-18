@@ -58,7 +58,36 @@ export async function POST(request: NextRequest) {
     const requestPayload: Record<string, unknown> = {
       model,
       temperature: 0.35,
-      response_format: { type: "json_object" },
+      response_format: {
+        type: "json_schema",
+        json_schema: {
+          name: "madara_roblox_project",
+          strict: true,
+          schema: {
+            type: "object",
+            properties: {
+              projectName: { type: "string" },
+              summary: { type: "string" },
+              instructions: { type: "array", items: { type: "string" } },
+              files: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    path: { type: "string" },
+                    kind: { type: "string", enum: ["server", "client", "module", "readme"] },
+                    code: { type: "string" }
+                  },
+                  required: ["path", "kind", "code"],
+                  additionalProperties: false
+                }
+              }
+            },
+            required: ["projectName", "summary", "instructions", "files"],
+            additionalProperties: false
+          }
+        }
+      },
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: `Creation mode: ${mode}\nGame request: ${prompt}\nReturn a complete starter project in the required JSON format.` }
@@ -85,18 +114,7 @@ export async function POST(request: NextRequest) {
 
     let upstream = await sendCompletion(requestPayload);
 
-    // GPT-OSS deployments can differ in accepted optional sampling/reasoning fields.
-    // On a validation error, retry the same model with only the essential JSON request.
-    if (upstream.status === 400 && model.startsWith("openai/gpt-oss-")) {
-      await upstream.text();
-      const compatibilityPayload: Record<string, unknown> = {
-        model,
-        response_format: { type: "json_object" },
-        messages: requestPayload.messages,
-        reasoning_format: "parsed"
-      };
-      upstream = await sendCompletion(compatibilityPayload);
-    }
+
 
     if (!upstream.ok) {
       const detail = await upstream.text();
