@@ -1,6 +1,6 @@
 import { task } from "@trigger.dev/sdk";
 import { NextRequest } from "next/server";
-import { POST as runGeneration } from "../app/api/generate/route";
+import { runGenerationPipeline } from "../app/api/generate/route";
 
 type BuildMode = "Full game" | "Game map" | "Gameplay system" | "UI interface" | "Lua script";
 
@@ -14,7 +14,7 @@ export const generateRobloxProject = task({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
-    const response = await runGeneration(request);
+    const response = await runGenerationPipeline(request);
     const result = await response.json() as Record<string, unknown>;
     if (!response.ok) {
       throw new Error(typeof result.error === "string" ? result.error : "Roblox generation failed.");
