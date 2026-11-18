@@ -55,21 +55,28 @@ export async function POST(request: NextRequest) {
       }, { status: 503 });
     }
 
+    const requestPayload: Record<string, unknown> = {
+      model,
+      temperature: 0.35,
+      response_format: { type: "json_object" },
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: `Creation mode: ${mode}\nGame request: ${prompt}\nReturn a complete starter project in the required JSON format.` }
+      ]
+    };
+
+    // Groq's GPT-OSS models require an explicit reasoning format when JSON mode is enabled.
+    if (model.startsWith("openai/gpt-oss-")) {
+      requestPayload.reasoning_format = "hidden";
+    }
+
     const upstream = await fetch(`${baseUrl}/chat/completions`, {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${apiKey}`,
         "Content-Type": "application/json"
       },
-      body: JSON.stringify({
-        model,
-        temperature: 0.35,
-        response_format: { type: "json_object" },
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: `Creation mode: ${mode}\nGame request: ${prompt}\nReturn a complete starter project in the required JSON format.` }
-        ]
-      }),
+      body: JSON.stringify(requestPayload),
       signal: AbortSignal.timeout(55000)
     });
 
