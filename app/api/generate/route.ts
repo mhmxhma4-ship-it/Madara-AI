@@ -70,15 +70,31 @@ export async function POST(request: NextRequest) {
       requestPayload.include_reasoning = false;
     }
 
-    const upstream = await fetch(`${baseUrl}/chat/completions`, {
+    const requestHeaders = {
+      "Authorization": `Bearer ${apiKey}`,
+      "Content-Type": "application/json"
+    };
+
+    const sendCompletion = (payload: Record<string, unknown>) => fetch(`${baseUrl}/chat/completions`, {
       method: "POST",
-      headers: {
-        "Authorization": `Bearer ${apiKey}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify(requestPayload),
+      headers: requestHeaders,
+      body: JSON.stringify(payload),
       signal: AbortSignal.timeout(55000)
     });
+
+    let upstream = await sendCompletion(requestPayload);
+
+    // GPT-OSS deployments can differ in accepted optional sampling/reasoning fields.
+    // On a validation error, retry the same model with only the essential JSON request.
+    if (upstream.status === 400 && model.startsWith("openai/gpt-oss-")) {
+      await upstream.text();
+      const compatibilityPayload = {
+        model,
+        response_format: { type: "json_object" },
+        messages: requestPayload.messages
+      };
+      upstream = await sendCompletion(compatibilityPayload);
+    }
 
     if (!upstream.ok) {
       const detail = await upstream.text();
@@ -91,13 +107,13 @@ export async function POST(request: NextRequest) {
           ? parsed.error.message
           : typeof parsed?.message === "string" ? parsed.message : "";
       } catch {
-        providerMessage = "";
+        providerMessage = detail;
       }
 
-      // Show the provider's actionable validation message, but never return request headers or secrets.
       const safeMessage = providerMessage
         .replace(/Bearer\\s+\\S+/gi, "[hidden]")
         .replace(/gsk_[A-Za-z0-9_-]+/g, "[hidden]")
+        .replace(/sk-[A-Za-z0-9_-]+/g, "[hidden]")
         .slice(0, 350);
 
       return NextResponse.json({
