@@ -1,7 +1,7 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { strToU8, zipSync } from "fflate";
-import { ArrowUp, Check, Code2, Copy, Download, ExternalLink, Gamepad2, Github, Layers3, LoaderCircle, Sparkles, WandSparkles, X, BrainCircuit, Globe2, Workflow } from "lucide-react";
+import { ArrowUp, Check, Code2, Copy, Download, ExternalLink, Gamepad2, Github, Layers3, LoaderCircle, Sparkles, WandSparkles, X, BrainCircuit, Globe2, Workflow, Clock3, Activity } from "lucide-react";
 
 type GeneratedFile = { path: string; kind: string; code: string };
 type Agent = { name: string; status: string; detail: string };
@@ -143,10 +143,17 @@ export default function Home() {
   const [project, setProject] = useState<Project | null>(null);
   const [activeFile, setActiveFile] = useState(0);
   const [copied, setCopied] = useState(false);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+
+  useEffect(() => {
+    if (!loading) return;
+    const timer = window.setInterval(() => setElapsedSeconds(seconds => seconds + 1), 1000);
+    return () => window.clearInterval(timer);
+  }, [loading]);
 
   async function generate() {
     if (!prompt.trim()) { setError("Write your Roblox game idea first."); return; }
-    setLoading(true); setError(""); setProject(null);
+    setElapsedSeconds(0); setLoading(true); setError(""); setProject(null);
     try {
       const response = await fetch("/api/generate", {
         method: "POST", headers: { "Content-Type": "application/json" },
@@ -248,6 +255,9 @@ export default function Home() {
   }
 
   const currentFile = project?.files[activeFile];
+  const estimatedProgress = Math.min(94, Math.max(2, Math.round((elapsedSeconds / 65) * 94)));
+  const elapsedLabel = `${String(Math.floor(elapsedSeconds / 60)).padStart(2, "0")}:${String(elapsedSeconds % 60).padStart(2, "0")}`;
+  const currentStage = elapsedSeconds < 12 ? "Game Architect" : elapsedSeconds < 27 ? "Environment Agent" : elapsedSeconds < 43 ? "Gameplay Agent" : elapsedSeconds < 53 ? "Roblox UI Agent" : "Luau Reviewer";
 
   return <main className="min-h-screen overflow-hidden">
     <header className="topbar">
@@ -272,7 +282,7 @@ export default function Home() {
         <textarea id="game-prompt" maxLength={5000} value={prompt} onChange={e => setPrompt(e.target.value)} placeholder={"Describe the Roblox game you want to create...\n\nExample: An anime simulator with 5 worlds, character companions, quests, boss fights and rebirths."}/>
         <div className="prompt-footer"><span>{prompt.length} / 5000</span><button className="generate-button" onClick={generate} disabled={loading}>{loading ? <><LoaderCircle size={16} className="spin"/> Agents working...</> : <><Sparkles size={16}/> Generate project <ArrowUp size={16}/></>}</button></div>
         {error && <p className="error-message" role="alert"><X size={15}/>{error}</p>}
-        {loading && <div className="agent-running"><div className="agent-running-title"><Workflow size={16}/> MADARA AGENT PIPELINE</div><div className="agent-running-steps"><span><BrainCircuit size={14}/> Architect</span><span><Globe2 size={14}/> Environment</span><span><Code2 size={14}/> Gameplay</span><span><Check size={14}/> Luau review</span></div><p>Agents are working on one shared game blueprint. This can take a little longer than a single prompt.</p></div>}
+        {loading && <div className="agent-running"><div className="agent-running-title"><Workflow size={16}/> MADARA AGENT PIPELINE <span className="pipeline-live"><i/> LIVE</span></div><div className="generation-stats"><div className="generation-stat"><span><Clock3 size={14}/> KOHA LIVE</span><strong>{elapsedLabel}</strong></div><div className="generation-stat"><span><Activity size={14}/> PROGRES I VLERESUAR</span><strong>{estimatedProgress}%</strong></div></div><div className="generation-progress-track" role="progressbar" aria-label="Estimated generation progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={estimatedProgress}><div className="generation-progress-fill" style={{ width: estimatedProgress + "%" }}/></div><div className="generation-progress-caption"><span>{currentStage}</span><span>{estimatedProgress}%</span></div><div className="agent-running-steps"><span className={elapsedSeconds < 12 ? "stage-active" : ""}><BrainCircuit size={14}/> Architect</span><span className={elapsedSeconds >= 12 && elapsedSeconds < 27 ? "stage-active" : ""}><Globe2 size={14}/> Environment</span><span className={elapsedSeconds >= 27 && elapsedSeconds < 43 ? "stage-active" : ""}><Code2 size={14}/> Gameplay</span><span className={elapsedSeconds >= 43 ? "stage-active" : ""}><Check size={14}/> UI + Review</span></div><p>Koha matet live. Perqindja eshte vleresim i progresit, jo numerim i sakte i tokenave ose puneve te perfunduara.</p></div>}
         <div className="examples"><span>TRY AN IDEA</span>{examples.map(x => <button key={x} onClick={() => { setPrompt(x); setError(""); }}>{x}<ArrowUp size={12} className="rotate-45"/></button>)}</div>
       </div>
     </section>
