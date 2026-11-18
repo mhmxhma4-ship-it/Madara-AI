@@ -161,7 +161,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-async function legacyPostDisabled(request: NextRequest) {
+export async function runGenerationPipeline(request: NextRequest) {
   try {
     const contentLength = Number(request.headers.get("content-length") || 0);
     if (contentLength > 24_000) {
