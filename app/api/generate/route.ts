@@ -4,7 +4,7 @@ export const runtime = "nodejs";
 export const maxDuration = 60;
 
 type BuildMode = "Full game" | "Game map" | "Gameplay system" | "UI interface" | "Lua script";
-type GeneratedFile = { path: string; kind: "server" | "client" | "module" | "readme"; code: string };
+type GeneratedFile = { path: string; kind: "server" | "client" | "module"; code: string };
 type ScenePart = {
   name: string; parentPath: string; className: "Part" | "SpawnLocation";
   position: { x: number; y: number; z: number }; size: { x: number; y: number; z: number };
@@ -53,16 +53,21 @@ function validFiles(value: unknown, maxFiles: number): GeneratedFile[] {
     const item = file as Record<string, unknown>;
     const path = item.path;
     const code = item.code;
-    return typeof path === "string" &&
-      path.length < 180 &&
-      !path.includes("..") &&
+    if (typeof path !== "string" || typeof code !== "string") return false;
+    const segments = path.split("/");
+    const allowedRoots = ["ServerScriptService", "ReplicatedStorage", "ServerStorage", "StarterGui", "StarterPlayer", "Workspace"];
+    const validStarterPlayerPath = segments[0] !== "StarterPlayer" || ["StarterPlayerScripts", "StarterCharacterScripts"].includes(segments[1] || "");
+    return path.length < 180 &&
+      segments.length >= 2 &&
+      segments.every(segment => segment.length > 0 && segment !== "." && segment !== "..") &&
+      allowedRoots.includes(segments[0]) &&
+      validStarterPlayerPath &&
       !path.startsWith("/") &&
       !path.includes(String.fromCharCode(92)) &&
       !/[<>:"|?*\u0000-\u001f]/.test(path) &&
-      typeof code === "string" &&
       code.trim().length > 0 &&
       code.length < MAX_FILE_LENGTH &&
-      ["server", "client", "module", "readme"].includes(String(item.kind));
+      ["server", "client", "module"].includes(String(item.kind));
   });
 }
 
