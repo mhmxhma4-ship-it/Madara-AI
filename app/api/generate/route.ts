@@ -222,7 +222,7 @@ export async function POST(request: NextRequest) {
             run: async () => {
               const systemText = messages.filter(message => message.role === "system").map(message => message.content || "").join("\\n\\n");
               const userText = messages.filter(message => message.role !== "system").map(message => `${message.role === "assistant" ? "Assistant" : "User"}:\\n${message.content || ""}`).join("\\n\\n");
-              const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent`, {
+              const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json", "x-goog-api-key": geminiApiKey },
                 body: JSON.stringify({
@@ -250,7 +250,7 @@ export async function POST(request: NextRequest) {
           attempts.push({
             name: "Cloudflare Workers AI",
             run: async () => {
-              const response = await fetch(`https://api.cloudflare.com/client/v4/accounts/${cloudflareAccountId}/ai/run/@cf/meta/llama-3.1-8b-instruct`, {
+              const response = await fetch(`https://api.cloudflare.com/client/v4/accounts/${cloudflareAccountId}/ai/run/@cf/meta/llama-3.3-70b-instruct-fp8-fast`, {
                 method: "POST",
                 headers: { Authorization: `Bearer ${cloudflareApiToken}`, "Content-Type": "application/json" },
                 body: JSON.stringify({
