@@ -6,6 +6,7 @@ import { ArrowUp, Bot, Check, Code2, Copy, Download, ExternalLink, Gamepad2, Git
 type GeneratedFile = { path: string; kind: string; code: string };
 type Agent = { name: string; status: string; detail: string };
 type Project = {
+  environmentPlan?: Array<Record<string, unknown>>;
   projectName: string; summary: string; gameDesign?: string; worldPlan?: string[];
   systemsPlan?: string[]; instructions: string[]; files: GeneratedFile[];
   agents?: Agent[]; agentNotes?: string[];
@@ -192,6 +193,7 @@ export default function Home() {
     };
 
     archive["default.project.json"] = strToU8(JSON.stringify(projectConfig, null, 2));
+    archive["madara-scene-plan.json"] = strToU8(JSON.stringify(project.environmentPlan || [], null, 2));
     archive["madara-manifest.json"] = strToU8(JSON.stringify({
       projectName: project.projectName,
       summary: project.summary,
@@ -242,6 +244,7 @@ export default function Home() {
     {project && <section className="result-wrap" aria-live="polite">
       <div className="result-heading"><div><div className="section-kicker">YOUR GENERATED PROJECT</div><h2>{project.projectName}</h2><p>{project.summary}</p></div><button className="download-button" onClick={downloadProject}><Download size={16}/> Download project ZIP</button></div>
 
+      {(project.environmentPlan?.length ?? 0) > 0 && <div className="scene-plan-note"><Globe2 size={16}/> <strong>{project.environmentPlan?.length} 3D objects</strong> are ready for direct construction by the Madara AI Studio Connector.</div>}
       {project.agents && <div className="agent-results"><div className="agent-results-title"><Workflow size={17}/> AGENT WORKFLOW <span>{project.agents.filter(agent => agent.status === "complete").length} / {project.agents.length} PASSED</span></div><div className="agent-results-grid">{project.agents.map(agent => <article className={agent.status === "warning" ? "agent-result agent-result-warning" : "agent-result"} key={agent.name}><div className="agent-result-icon">{agent.status === "warning" ? <X size={15}/> : <Check size={15}/>}</div><strong>{agent.name}</strong><p>{agent.detail}</p></article>)}</div></div>}
 
       {(project.gameDesign || (project.worldPlan?.length ?? 0) > 0 || (project.systemsPlan?.length ?? 0) > 0) && <div className="blueprint-card">
