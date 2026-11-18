@@ -196,20 +196,48 @@ export async function POST(request: NextRequest) {
         payload.reasoning_effort = "low";
       }
 
-      const response = await fetch(`${baseUrl}/chat/completions`, {
+      const sendRequest = (requestPayload: Record<string, unknown>) => fetch(`${baseUrl}/chat/completions`, {
         method: "POST",
         headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(requestPayload),
         signal: AbortSignal.timeout(timeoutMs),
         cache: "no-store"
       });
 
+      let response = await sendRequest(payload);
+      let detail = "";
+      // Groq can reject constrained JSON generation for some GPT-OSS outputs.
+      // Retry once in ordinary chat mode while keeping the strict JSON instruction.
       if (!response.ok) {
-        const detail = await response.text();
+        detail = await response.text();
+        const jsonValidationFailure =
+          response.status === 400 &&
+          /failed to validate json|failed_generation|json mode|response_format/i.test(detail);
+        if (jsonValidationFailure) {
+          const retryPayload = { ...payload };
+          delete retryPayload.response_format;
+          retryPayload.temperature = 0.1;
+          retryPayload.messages = [
+            {
+              role: "system",
+              content: `You are the ${agentName}. Return exactly one valid JSON object and nothing else. No markdown fences, no commentary, no trailing commas. Follow the requested JSON structure exactly. ${instructions}`
+            },
+            {
+              role: "user",
+              content: `Creation mode: ${mode}\nUser's exact game idea: ${prompt}\n\nAdditional project context:\n${extraContext}\n\nIMPORTANT: Output only valid JSON.`
+            }
+          ];
+          response = await sendRequest(retryPayload);
+          if (!response.ok) detail = await response.text();
+        }
+      }
+
+      if (!response.ok) {
         let message = "";
         try {
           const parsed = JSON.parse(detail);
           message = typeof parsed?.error?.message === "string" ? parsed.error.message : "";
+          if (!message && typeof parsed?.error === "string") message = parsed.error;
         } catch { message = ""; }
         const clean = message
           .replace(/Bearer\s+\S+/gi, "[hidden]")
