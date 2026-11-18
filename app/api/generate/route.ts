@@ -334,7 +334,7 @@ export async function POST(request: NextRequest) {
         { name: "Game Architect", status: "complete", detail: "Game loop, progression and world blueprint created." },
         { name: "Environment Agent", status: environmentPlan.length > 0 || !["Full game", "Game map"].includes(mode) ? "complete" : "warning", detail: environmentPlan.length > 0 ? `${environmentPlan.length} 3D scene objects planned for direct Studio construction.` : ["Full game", "Game map"].includes(mode) ? "No static 3D scene objects were returned." : "Map generation skipped for this creation mode." },
         { name: "Gameplay Agent", status: mode === "Game map" || gameplayFiles.length > 0 ? "complete" : "warning", detail: mode === "Game map" ? "Gameplay systems skipped by design for map-only mode." : gameplayFiles.length > 0 ? `${gameplayFiles.length} gameplay or interface scripts generated.` : "No gameplay scripts were returned for this mode." },
-        { name: "Luau Reviewer", status: reviewerCompleted ? "complete" : "warning", detail: reviewerCompleted ? "Project reviewed and concrete fixes applied where needed." : "Automated review did not finish; manual Studio testing is required." }
+        { name: "Luau Reviewer", status: reviewerCompleted && reviewWarnings.length === 0 ? "complete" : "warning", detail: !reviewerCompleted ? "Automated review did not finish; manual Studio testing is required." : reviewWarnings.length > 0 ? "Review completed with remaining warnings. Read the notes before inserting." : "Project reviewed and concrete fixes applied where needed." }
       ],
       agentNotes: [
         ...strings(environment.environmentNotes, 4),
