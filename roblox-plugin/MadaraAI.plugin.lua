@@ -5,6 +5,7 @@
 -- It never asks for or stores a Roblox password, cookie, or Open Cloud API key.
 
 local HttpService = game:GetService("HttpService")
+local ChangeHistoryService = game:GetService("ChangeHistoryService")
 
 local TOOLBAR = plugin:CreateToolbar("Madara AI")
 local OPEN_BUTTON = TOOLBAR:CreateButton("OpenMadaraAI", "Open the Madara AI game builder", "")
@@ -211,6 +212,7 @@ make("TextLabel", {
 
 local generatedProject: any = nil
 local busy = false
+local pendingInsertConfirmation = false
 
 local function setStatus(message: string, color: Color3?)
 	status.Text = message
@@ -289,6 +291,7 @@ generateButton.Activated:Connect(function()
 	end
 
 	generatedProject = decoded
+	pendingInsertConfirmation = false
 	local warningCount = 0
 	if type(decoded.agentNotes) == "table" then
 		for _, note in ipairs(decoded.agentNotes) do
@@ -350,8 +353,8 @@ local function insertFile(file: any): (boolean, string)
 	for index = 2, #segments - 1 do
 		local folderName = segments[index]
 		local child = parent:FindFirstChild(folderName)
-		if child and not child:IsA("Folder") then
-			return false, "A non-folder already exists at " .. folderName
+		if child and child:IsA("LuaSourceContainer") then
+			return false, "A script already exists where a folder is required: " .. folderName
 		end
 		if not child then
 			local folder = Instance.new("Folder")
@@ -400,14 +403,15 @@ insertButton.Activated:Connect(function()
 	if busy or type(generatedProject) ~= "table" or type(generatedProject.files) ~= "table" then
 		return
 	end
-	local answer = plugin:GetSetting("MadaraAIInsertConfirmed")
-	if answer ~= true then
-		setStatus("Before first insert: check the generated files. Press Insert again to confirm that same-path scripts may be replaced.", Color3.fromRGB(255, 190, 90))
-		plugin:SetSetting("MadaraAIInsertConfirmed", true)
+	if not pendingInsertConfirmation then
+		pendingInsertConfirmation = true
+		setStatus("Confirm this insert: scripts with matching paths will be updated. Press Insert again to continue.", Color3.fromRGB(255, 190, 90))
 		return
 	end
+	pendingInsertConfirmation = false
 
 	busy = true
+	local recordingId = ChangeHistoryService:TryBeginRecording("MadaraAIInsert", "Insert generated Madara AI scripts")
 	local inserted = 0
 	local failures = {}
 	for _, file in ipairs(generatedProject.files) do
@@ -419,8 +423,11 @@ insertButton.Activated:Connect(function()
 		end
 	end
 
+	if recordingId then
+		ChangeHistoryService:FinishRecording(recordingId, Enum.FinishRecordingOperation.Commit)
+	end
 	if #failures == 0 then
-		setStatus("Inserted " .. tostring(inserted) .. " scripts. Press Play and test the game. Save a backup before publishing.", COLORS.green)
+		setStatus("Inserted " .. tostring(inserted) .. " scripts. You can Undo this insertion. Press Play and test the game; save a backup before publishing.", COLORS.green)
 	else
 		setStatus("Inserted " .. tostring(inserted) .. " files; " .. tostring(#failures) .. " failed:\n" .. table.concat(failures, "\n"), COLORS.red)
 	end
