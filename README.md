@@ -22,7 +22,7 @@ Add these in Vercel → Project → Settings → Environment Variables, then red
 
 ## Long-running background generation (Trigger.dev)
 
-Game generation runs as a durable Trigger.dev task instead of inside a Vercel request. The task is configured with a maximum duration of 1 hour; this is an execution ceiling, not a promise that every build will take or need an hour. Provider rate limits, outages, token quotas and Trigger.dev plan credits still apply.
+Game generation runs as a durable Trigger.dev task instead of inside a Vercel request. The task is configured with a maximum duration of 2 hours; this is an execution ceiling, not a promise that every build will take or need an hour. Provider rate limits, outages, token quotas and Trigger.dev plan credits still apply.
 
 ### Connect the project
 
