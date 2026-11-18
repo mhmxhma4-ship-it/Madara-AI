@@ -79,6 +79,22 @@ function PublishNowPanel() {
   </section>;
 }
 
+function StudioConnectorPanel() {
+  return <section className="studio-connector-panel" id="studio-connector">
+    <div className="section-kicker">ROBLOX STUDIO INTEGRATION</div>
+    <h2>Build inside Roblox Studio.</h2>
+    <p>Use the Madara AI Studio Connector to send a game idea from Studio, generate the project and insert its scripts into the correct Roblox services.</p>
+    <div className="studio-connector-steps">
+      <span><strong>01</strong> Install the local Studio plugin</span>
+      <span><strong>02</strong> Generate with Madara AI agents</span>
+      <span><strong>03</strong> Review and insert scripts</span>
+      <span><strong>04</strong> Test in Play mode</span>
+    </div>
+    <a className="generate-button studio-plugin-link" href="https://raw.githubusercontent.com/mhmxhma4-ship-it/Madara-AI/main/roblox-plugin/MadaraAI.plugin.lua" target="_blank" rel="noreferrer">Open Studio Connector source <ExternalLink size={15}/></a>
+    <p className="studio-connector-note">Requires Roblox Studio on a computer. The Roblox iPhone app cannot install or run Studio plugins. The connector never asks for your Roblox password or security cookie.</p>
+  </section>;
+}
+
 export default function Home() {
   const [prompt, setPrompt] = useState("");
   const [mode, setMode] = useState("Full game");
@@ -166,7 +182,7 @@ export default function Home() {
       <p className="publish-note">Madara AI uses separate planning, environment, gameplay and code-review agents. Scripts still need testing in Roblox Studio. This export is a script bundle, not yet a Roblox place file.</p>
     </section>}
 
-    <PublishNowPanel />\n\n    <section className="steps" id="how-it-works">
+    <StudioConnectorPanel />\n    <PublishNowPanel />\n\n    <section className="steps" id="how-it-works">
       <div className="section-kicker">FROM IDEA TO EXPERIENCE</div><h2>Your AI team starts here.</h2>
       <div className="steps-grid">
         <article className="step-card"><div className="step-icon"><BrainCircuit/></div><span>01 / ARCHITECT</span><h3>Plan the experience</h3><p>The architect defines the game loop, worlds, progression and systems.</p></article>
