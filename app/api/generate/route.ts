@@ -274,11 +274,11 @@ export async function POST(request: NextRequest) {
     try {
       const review = await askAgent(
         "Luau Code Reviewer",
-        `Review the complete generated project for Roblox Luau correctness, missing dependencies, incorrect service paths, server/client boundary mistakes, unsafe remote handling, DataStore error handling and obvious logic defects. Return JSON with:
-        files: array containing corrected full files {path,kind,code}; qualityChecks: array of concise checks performed; warnings: array of genuine remaining risks.
+        `Review the complete generated project and 3D scene plan for Roblox Luau correctness, missing dependencies, incorrect service paths, server/client boundary mistakes, unsafe remote handling, DataStore error handling, floating or badly scaled map geometry and obvious logic defects. Return JSON with:
+        files: array containing corrected full files {path,kind,code}; qualityChecks: array of concise checks performed; warnings: array of genuine remaining risks; sceneWarnings: array of map-specific issues.
         IMPORTANT: Return a corrected file only when you made a real improvement. Preserve the exact path and kind for every corrected file. Do not rewrite working code just for style. Do not add unrelated systems. If a file is already sound, omit it from files. Never say code was executed or tested.`,
         3000,
-        JSON.stringify({ blueprint: architect, files })
+        JSON.stringify({ blueprint: architect, files, environmentPlan })
       );
       const corrected = validFiles(review.files, 8);
       for (const fix of corrected) {
@@ -288,9 +288,10 @@ export async function POST(request: NextRequest) {
       reviewChecks = Array.isArray(review.qualityChecks)
         ? review.qualityChecks.filter((item): item is string => typeof item === "string").slice(0, 8)
         : [];
-      reviewWarnings = Array.isArray(review.warnings)
-        ? review.warnings.filter((item): item is string => typeof item === "string").slice(0, 8)
-        : [];
+      reviewWarnings = [
+        ...(Array.isArray(review.warnings) ? review.warnings.filter((item): item is string => typeof item === "string").slice(0, 6) : []),
+        ...(Array.isArray(review.sceneWarnings) ? review.sceneWarnings.filter((item): item is string => typeof item === "string").slice(0, 6) : [])
+      ].slice(0, 10);
       reviewerCompleted = true;
     } catch (reviewError) {
       console.warn("Madara AI reviewer unavailable:", reviewError);
