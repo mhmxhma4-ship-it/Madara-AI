@@ -1,0 +1,108 @@
+import { NextRequest, NextResponse } from "next/server";
+
+export const runtime = "nodejs";
+export const maxDuration = 60;
+
+type BuildMode = "Full game" | "Game map" | "Gameplay system" | "UI interface" | "Lua script";
+
+const allowedModes: BuildMode[] = ["Full game", "Game map", "Gameplay system", "UI interface", "Lua script"];
+
+const systemPrompt = `You are Madara AI, an expert Roblox Luau game architect. Generate practical, secure, maintainable Roblox Studio projects.
+Return ONLY valid JSON with this exact shape:
+{"projectName":"string","summary":"string","instructions":["string"],"files":[{"path":"string","kind":"server|client|module|readme","code":"string"}]}
+Rules:
+- Generate real Luau source code, not pseudocode.
+- Use Roblox services correctly and server-authoritative validation for currency, purchases, damage, rewards and progression.
+- Never use loadstring, external executors, exploit APIs, hidden admin backdoors, or require(assetId) for unknown code.
+- Use RemoteEvents/RemoteFunctions with validation and rate limits where needed.
+- Include clear file paths under ServerScriptService, ReplicatedStorage, StarterPlayerScripts, StarterGui, or Workspace setup instructions.
+- Keep each file focused and include all required scripts/modules for the requested scope.
+- For maps, generate a build script that creates the map using Parts, Models, Lighting and safe Roblox APIs. Explain where to run it in Studio.
+- For full games, create a playable MVP, not an empty template. Include setup instructions and a sensible folder structure.
+- Do not claim the project has been tested or published.
+- Keep output concise enough to fit a normal response. Generate up to 8 files.`;
+
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json();
+    const prompt = typeof body.prompt === "string" ? body.prompt.trim() : "";
+    const mode = body.mode as BuildMode;
+
+    if (!prompt || prompt.length > 5000) {
+      return NextResponse.json({ error: "Write a game idea between 1 and 5000 characters." }, { status: 400 });
+    }
+    if (!allowedModes.includes(mode)) {
+      return NextResponse.json({ error: "Choose a valid creation mode." }, { status: 400 });
+    }
+
+    const apiKey = process.env.OPENAI_API_KEY;
+    const model = process.env.OPENAI_MODEL || "gpt-4o-mini";
+    const baseUrl = (process.env.OPENAI_BASE_URL || "https://api.openai.com/v1").replace(/\/$/, "");
+
+    if (!apiKey) {
+      return NextResponse.json({
+        error: "AI is not connected yet. Add OPENAI_API_KEY in Vercel → Project → Settings → Environment Variables, then redeploy."
+      }, { status: 503 });
+    }
+
+    const upstream = await fetch(`${baseUrl}/chat/completions`, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${apiKey}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model,
+        temperature: 0.35,
+        response_format: { type: "json_object" },
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: `Creation mode: ${mode}\nGame request: ${prompt}\nReturn a complete starter project in the required JSON format.` }
+        ]
+      }),
+      signal: AbortSignal.timeout(55000)
+    });
+
+    if (!upstream.ok) {
+      const detail = await upstream.text();
+      console.error("AI provider error:", upstream.status, detail.slice(0, 1000));
+      return NextResponse.json({ error: upstream.status === 401 ? "The AI API key was rejected. Check OPENAI_API_KEY." : "The AI provider could not complete the build. Check your provider settings and try again." }, { status: 502 });
+    }
+
+    const data = await upstream.json();
+    const raw = data.choices?.[0]?.message?.content;
+    if (typeof raw !== "string") {
+      return NextResponse.json({ error: "The AI provider returned an empty response. Try again." }, { status: 502 });
+    }
+
+    let project: { projectName?: string; summary?: string; instructions?: string[]; files?: Array<{ path?: string; kind?: string; code?: string }> };
+    try {
+      project = JSON.parse(raw);
+    } catch {
+      return NextResponse.json({ error: "The AI response was not valid project JSON. Please try again." }, { status: 502 });
+    }
+
+    const files = Array.isArray(project.files) ? project.files.slice(0, 8).filter((file) =>
+      typeof file.path === "string" &&
+      typeof file.code === "string" &&
+      file.path.length < 180 &&
+      file.code.length < 60000 &&
+      !file.path.includes("..") &&
+      !file.path.startsWith("/")
+    ) : [];
+
+    if (!files.length) {
+      return NextResponse.json({ error: "The AI did not return any usable Luau files. Try a more specific prompt." }, { status: 502 });
+    }
+
+    return NextResponse.json({
+      projectName: typeof project.projectName === "string" ? project.projectName.slice(0, 100) : "My Roblox Game",
+      summary: typeof project.summary === "string" ? project.summary : "Roblox starter project generated by Madara AI.",
+      instructions: Array.isArray(project.instructions) ? project.instructions.filter((item) => typeof item === "string").slice(0, 20) : [],
+      files
+    });
+  } catch (error) {
+    console.error("Madara AI generation error:", error);
+    return NextResponse.json({ error: "Something went wrong while generating your project. Please try again." }, { status: 500 });
+  }
+}
