@@ -304,7 +304,7 @@ export async function POST(request: NextRequest) {
         let repairedResponse = await sendRequest(repairPayload);
         if (repairedResponse.status === 429) {
           const retryDetail = await repairedResponse.text();
-          const retryMatch = retryDetail.match(/try again in\\s+([0-9.]+)s/i);
+          const retryMatch = retryDetail.match(/try again in\s+([0-9.]+)s/i);
           const retryHeader = Number(repairedResponse.headers.get("retry-after") || 0);
           const retryBody = retryMatch ? Number(retryMatch[1]) : 0;
           const cooldown = Math.min(35000, Math.max(1000, retryHeader * 1000, retryBody * 1000) + 750);
