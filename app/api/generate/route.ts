@@ -222,6 +222,34 @@ export async function POST(request: NextRequest) {
           });
         }
 
+        if (cloudflareAccountId && cloudflareApiToken) {
+          attempts.push({
+            name: "Cloudflare Workers AI",
+            run: async () => {
+              const response = await fetch(`https://api.cloudflare.com/client/v4/accounts/${cloudflareAccountId}/ai/run/@cf/meta/llama-3.3-70b-instruct-fp8-fast`, {
+                method: "POST",
+                headers: { Authorization: `Bearer ${cloudflareApiToken}`, "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  messages,
+                  max_tokens: Number(requestPayload.max_completion_tokens ?? requestPayload.max_tokens ?? 4096),
+                  temperature: Number(requestPayload.temperature ?? 0.2),
+                  response_format: { type: "json_object" }
+                }),
+                ...requestOptions()
+              });
+              if (!response.ok) return response;
+              const data = await response.json();
+              const content = typeof data.result?.response === "string"
+                ? data.result.response
+                : typeof data.result?.choices?.[0]?.message?.content === "string"
+                  ? data.result.choices[0].message.content
+                  : "";
+              if (!content) return Response.json({ error: { message: "Cloudflare returned an empty model response." } }, { status: 502 });
+              return Response.json({ choices: [{ message: { content } }] });
+            }
+          });
+        }
+
         if (geminiApiKey) {
           attempts.push({
             name: "Gemini",
@@ -247,34 +275,6 @@ export async function POST(request: NextRequest) {
               const content = Array.isArray(data.candidates?.[0]?.content?.parts)
                 ? data.candidates[0].content.parts.map((part: { text?: string }) => part.text || "").join("")
                 : "";
-              return Response.json({ choices: [{ message: { content } }] });
-            }
-          });
-        }
-
-        if (cloudflareAccountId && cloudflareApiToken) {
-          attempts.push({
-            name: "Cloudflare Workers AI",
-            run: async () => {
-              const response = await fetch(`https://api.cloudflare.com/client/v4/accounts/${cloudflareAccountId}/ai/run/@cf/meta/llama-3.3-70b-instruct-fp8-fast`, {
-                method: "POST",
-                headers: { Authorization: `Bearer ${cloudflareApiToken}`, "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  messages,
-                  max_tokens: Number(requestPayload.max_completion_tokens ?? requestPayload.max_tokens ?? 4096),
-                  temperature: Number(requestPayload.temperature ?? 0.2),
-                  response_format: { type: "json_object" }
-                }),
-                ...requestOptions()
-              });
-              if (!response.ok) return response;
-              const data = await response.json();
-              const content = typeof data.result?.response === "string"
-                ? data.result.response
-                : typeof data.result?.choices?.[0]?.message?.content === "string"
-                  ? data.result.choices[0].message.content
-                  : "";
-              if (!content) return Response.json({ error: { message: "Cloudflare returned an empty model response." } }, { status: 502 });
               return Response.json({ choices: [{ message: { content } }] });
             }
           });
