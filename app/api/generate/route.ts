@@ -5,6 +5,13 @@ export const maxDuration = 60;
 
 type BuildMode = "Full game" | "Game map" | "Gameplay system" | "UI interface" | "Lua script";
 type GeneratedFile = { path: string; kind: "server" | "client" | "module" | "readme"; code: string };
+type ScenePart = {
+  name: string; parentPath: string; className: "Part" | "SpawnLocation";
+  position: { x: number; y: number; z: number }; size: { x: number; y: number; z: number };
+  color: { r: number; g: number; b: number }; material: string;
+  shape: "Block" | "Ball" | "Cylinder"; rotation: { x: number; y: number; z: number };
+  anchored: boolean; canCollide: boolean; transparency: number;
+};
 type JsonObject = Record<string, unknown>;
 
 const allowedModes: BuildMode[] = ["Full game", "Game map", "Gameplay system", "UI interface", "Lua script"];
@@ -59,6 +66,40 @@ function validFiles(value: unknown, maxFiles: number): GeneratedFile[] {
   });
 }
 
+function validScenePlan(value: unknown): ScenePart[] {
+  if (!Array.isArray(value)) return [];
+  const materials = new Set(["SmoothPlastic", "Plastic", "Neon", "Metal", "Wood", "WoodPlanks", "Concrete", "Grass", "Sand", "Brick", "Slate", "Glass", "Ice", "Marble", "Granite", "DiamondPlate", "Fabric", "Foil", "CorrodedMetal", "ForceField", "Asphalt", "Basalt", "Ground", "LeafyGrass", "Limestone", "Mud", "Pavement", "Rock", "Salt", "Sandstone", "Snow", "Water"]);
+  const vector = (input: unknown, min: number, max: number) => {
+    if (!input || typeof input !== "object") return null;
+    const value = input as Record<string, unknown>;
+    const { x, y, z } = value;
+    if (![x, y, z].every(n => typeof n === "number" && Number.isFinite(n) && n >= min && n <= max)) return null;
+    return { x: x as number, y: y as number, z: z as number };
+  };
+  const color = (input: unknown) => {
+    if (!input || typeof input !== "object") return null;
+    const { r, g, b } = input as Record<string, unknown>;
+    if (![r, g, b].every(n => typeof n === "number" && Number.isFinite(n) && n >= 0 && n <= 1)) return null;
+    return { r: r as number, g: g as number, b: b as number };
+  };
+  return value.slice(0, 100).flatMap(item => {
+    if (!item || typeof item !== "object") return [];
+    const part = item as Record<string, unknown>;
+    const name = typeof part.name === "string" ? part.name.trim() : "";
+    const parentPath = typeof part.parentPath === "string" ? part.parentPath.trim() : "World";
+    const className = part.className;
+    const position = vector(part.position, -10000, 10000);
+    const size = vector(part.size, 0.2, 512);
+    const partColor = color(part.color);
+    const rotation = vector(part.rotation ?? { x: 0, y: 0, z: 0 }, -360, 360);
+    const segments = parentPath.split("/");
+    if (!/^[A-Za-z0-9 _-]{1,50}$/.test(name) || !/^[A-Za-z0-9 _/-]{1,120}$/.test(parentPath) || segments.some(segment => !segment || segment === "." || segment === "..") || !["Part", "SpawnLocation"].includes(String(className)) || !position || !size || !partColor || !rotation) return [];
+    const shape = ["Block", "Ball", "Cylinder"].includes(String(part.shape)) ? part.shape as ScenePart["shape"] : "Block";
+    const material = typeof part.material === "string" && materials.has(part.material) ? part.material : "SmoothPlastic";
+    const transparency = typeof part.transparency === "number" && Number.isFinite(part.transparency) ? Math.max(0, Math.min(1, part.transparency)) : 0;
+    return [{ name, parentPath, className: className as ScenePart["className"], position, size, color: partColor, material, shape, rotation, anchored: typeof part.anchored === "boolean" ? part.anchored : true, canCollide: typeof part.canCollide === "boolean" ? part.canCollide : true, transparency }];
+  });
+}
 function uniqueByPath(files: GeneratedFile[]) {
   return files.filter((file, index, all) =>
     all.findIndex(other => other.path.toLowerCase() === file.path.toLowerCase()) === index
