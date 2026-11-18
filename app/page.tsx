@@ -150,7 +150,7 @@ export default function Home() {
     {project && <section className="result-wrap" aria-live="polite">
       <div className="result-heading"><div><div className="section-kicker">YOUR GENERATED PROJECT</div><h2>{project.projectName}</h2><p>{project.summary}</p></div><button className="download-button" onClick={downloadProject}><Download size={16}/> Download scripts</button></div>
 
-      {project.agents && <div className="agent-results"><div className="agent-results-title"><Workflow size={17}/> AGENT WORKFLOW <span>4 / 4 COMPLETE</span></div><div className="agent-results-grid">{project.agents.map(agent => <article className="agent-result" key={agent.name}><div className="agent-result-icon"><Check size={15}/></div><strong>{agent.name}</strong><p>{agent.detail}</p></article>)}</div></div>}
+      {project.agents && <div className="agent-results"><div className="agent-results-title"><Workflow size={17}/> AGENT WORKFLOW <span>{project.agents.filter(agent => agent.status === "complete").length} / {project.agents.length} PASSED</span></div><div className="agent-results-grid">{project.agents.map(agent => <article className={agent.status === "warning" ? "agent-result agent-result-warning" : "agent-result"} key={agent.name}><div className="agent-result-icon">{agent.status === "warning" ? <X size={15}/> : <Check size={15}/>}</div><strong>{agent.name}</strong><p>{agent.detail}</p></article>)}</div></div>}
 
       {(project.gameDesign || (project.worldPlan?.length ?? 0) > 0 || (project.systemsPlan?.length ?? 0) > 0) && <div className="blueprint-card">
         <div className="section-kicker">GAME BLUEPRINT</div>{project.gameDesign && <p className="blueprint-description">{project.gameDesign}</p>}
@@ -163,7 +163,7 @@ export default function Home() {
       </div>
       {project.instructions.length > 0 && <div className="instructions"><h3><Check size={17}/> Setup in Roblox Studio</h3><ol>{project.instructions.map((x,i) => <li key={i}>{x}</li>)}</ol></div>}
       {project.agentNotes && project.agentNotes.length > 0 && <div className="instructions"><h3><Sparkles size={17}/> Agent build notes</h3><ul>{project.agentNotes.map((x,i) => <li key={i}>{x}</li>)}</ul></div>}
-      <p className="publish-note">Madara AI now uses separate AI agents for planning, environment and gameplay. Scripts still need review and testing in Roblox Studio. This export is a script bundle, not yet a Roblox place file.</p>
+      <p className="publish-note">Madara AI uses separate planning, environment, gameplay and code-review agents. Scripts still need testing in Roblox Studio. This export is a script bundle, not yet a Roblox place file.</p>
     </section>}
 
     <PublishNowPanel />\n\n    <section className="steps" id="how-it-works">
