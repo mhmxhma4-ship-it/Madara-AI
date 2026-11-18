@@ -302,8 +302,8 @@ export default function Home() {
       <div className="section-kicker">FROM IDEA TO EXPERIENCE</div><h2>Your AI team starts here.</h2>
       <div className="steps-grid">
         <article className="step-card"><div className="step-icon"><BrainCircuit/></div><span>01 / ARCHITECT</span><h3>Plan the experience</h3><p>The architect defines the game loop, worlds, progression and systems.</p></article>
-        <article className="step-card"><div className="step-icon"><Globe2/></div><span>02 / ENVIRONMENT</span><h3>Build the world</h3><p>The environment agent creates the map and world-building scripts.</p></article>
-        <article className="step-card"><div className="step-icon"><Code2/></div><span>03 / GAMEPLAY</span><h3>Make it playable</h3><p>The gameplay agent creates Luau systems, then the project builder combines the files.</p></article>
+        <article className="step-card"><div className="step-icon"><Globe2/></div><span>02 / ENVIRONMENT</span><h3>Build the world</h3><p>The environment agent plans the 3D layout; the Studio Connector constructs it in Workspace.</p></article>
+        <article className="step-card"><div className="step-icon"><Code2/></div><span>03 / GAMEPLAY</span><h3>Make it playable</h3><p>The gameplay agent creates Luau systems, then a reviewer checks the scripts and scene plan.</p></article>
       </div>
     </section>
     <footer><a className="brand" href="#"><span className="brand-mark"><WandSparkles size={17}/></span><span>madara<span className="brand-ai">.ai</span></span></a><span>Built for creators, powered by imagination.</span><a href="https://github.com/mhmxhma4-ship-it/Madara-AI" target="_blank" rel="noreferrer"><Github size={15}/> Source code <ExternalLink size={12}/></a></footer>
