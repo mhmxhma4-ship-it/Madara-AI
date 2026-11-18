@@ -399,6 +399,64 @@ local function insertFile(file: any): (boolean, string)
 	return true, file.path
 end
 
+local function insertScenePart(part: any): (boolean, string)
+	if type(part) ~= "table" or type(part.name) ~= "string" then return false, "Invalid 3D object entry." end
+	local parentPath = type(part.parentPath) == "string" and part.parentPath or "World"
+	if #parentPath > 120 or string.find(parentPath, "..", 1, true) or string.find(parentPath, "\\", 1, true) then return false, "Blocked unsafe scene folder path." end
+	local parent: Instance = workspace
+	for _, segment in ipairs(string.split(parentPath, "/")) do
+		if segment == "" or segment == "." or string.find(segment, "[<>:\"|%?%*]") then return false, "Invalid scene folder name." end
+		local folder = parent:FindFirstChild(segment)
+		if folder and folder:IsA("LuaSourceContainer") then return false, "A script blocks the scene folder path: " .. segment end
+		if not folder then
+			local created = Instance.new("Folder")
+			created.Name = segment
+			created.Parent = parent
+			folder = created
+		end
+		parent = folder
+	end
+	local className = part.className
+	if className ~= "Part" and className ~= "SpawnLocation" then return false, "Unsupported 3D object type." end
+	local position, size, color = part.position, part.size, part.color
+	local rotation = part.rotation or {x = 0, y = 0, z = 0}
+	local function validVector(value: any, minimum: number, maximum: number): boolean
+		return type(value) == "table" and type(value.x) == "number" and type(value.y) == "number" and type(value.z) == "number"
+			and value.x == value.x and value.y == value.y and value.z == value.z
+			and math.abs(value.x) <= maximum and math.abs(value.y) <= maximum and math.abs(value.z) <= maximum
+			and (minimum <= 0 or (value.x >= minimum and value.y >= minimum and value.z >= minimum))
+	end
+	if not validVector(position, -10000, 10000) or not validVector(size, 0.2, 512) or not validVector(rotation, -360, 360) then return false, "Invalid position, size or rotation for " .. part.name end
+	if type(color) ~= "table" or type(color.r) ~= "number" or type(color.g) ~= "number" or type(color.b) ~= "number" then return false, "Invalid color for " .. part.name end
+	local existing = parent:FindFirstChild(part.name)
+	local object: BasePart
+	if existing then
+		if not existing:IsA(className) then return false, "A different object already exists at " .. part.name end
+		object = existing :: BasePart
+	else
+		object = Instance.new(className) :: BasePart
+		object.Name = part.name
+		object.Parent = parent
+	end
+	object.Size = Vector3.new(math.clamp(size.x, 0.2, 512), math.clamp(size.y, 0.2, 512), math.clamp(size.z, 0.2, 512))
+	object.CFrame = CFrame.new(position.x, position.y, position.z) * CFrame.Angles(math.rad(rotation.x), math.rad(rotation.y), math.rad(rotation.z))
+	object.Color = Color3.new(math.clamp(color.r, 0, 1), math.clamp(color.g, 0, 1), math.clamp(color.b, 0, 1))
+	local material = type(part.material) == "string" and Enum.Material[part.material] or nil
+	object.Material = material or Enum.Material.SmoothPlastic
+	if object:IsA("Part") then
+		local shape = type(part.shape) == "string" and Enum.PartType[part.shape] or nil
+		object.Shape = shape or Enum.PartType.Block
+	end
+	object.Anchored = part.anchored ~= false
+	object.CanCollide = part.canCollide ~= false
+	object.Transparency = type(part.transparency) == "number" and math.clamp(part.transparency, 0, 1) or 0
+	if object:IsA("SpawnLocation") then
+		object.Neutral = true
+		object.Duration = 0
+	end
+	return true, parentPath .. "/" .. part.name
+end
+
 insertButton.Activated:Connect(function()
 	if busy or type(generatedProject) ~= "table" or type(generatedProject.files) ~= "table" then
 		return
@@ -418,13 +476,24 @@ insertButton.Activated:Connect(function()
 		return
 	end
 	local inserted = 0
+	local objectsInserted = 0
 	local failures = {}
 	for _, file in ipairs(generatedProject.files) do
-		local ok, message = insertFile(file)
-		if ok then
+		local callOk, ok, message = pcall(insertFile, file)
+		if callOk and ok then
 			inserted += 1
 		else
-			table.insert(failures, message)
+			table.insert(failures, callOk and message or tostring(ok))
+		end
+	end
+	if type(generatedProject.environmentPlan) == "table" then
+		for _, part in ipairs(generatedProject.environmentPlan) do
+			local callOk, ok, message = pcall(insertScenePart, part)
+			if callOk and ok then
+				objectsInserted += 1
+			else
+				table.insert(failures, callOk and message or tostring(ok))
+			end
 		end
 	end
 
@@ -432,9 +501,9 @@ insertButton.Activated:Connect(function()
 		ChangeHistoryService:FinishRecording(recordingId, Enum.FinishRecordingOperation.Commit)
 	end
 	if #failures == 0 then
-		setStatus("Inserted " .. tostring(inserted) .. " scripts. You can Undo this insertion. Press Play and test the game; save a backup before publishing.", COLORS.green)
+		setStatus("Inserted " .. tostring(inserted) .. " scripts and built " .. tostring(objectsInserted) .. " 3D objects. You can Undo this insertion. Press Play and test the game; save a backup before publishing.", COLORS.green)
 	else
-		setStatus("Inserted " .. tostring(inserted) .. " files; " .. tostring(#failures) .. " failed:\n" .. table.concat(failures, "\n"), COLORS.red)
+		setStatus("Inserted " .. tostring(inserted) .. " scripts and " .. tostring(objectsInserted) .. " objects; " .. tostring(#failures) .. " failed:\n" .. table.concat(failures, "\n"), COLORS.red)
 	end
 	busy = false
 end)
