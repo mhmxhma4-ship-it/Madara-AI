@@ -168,8 +168,11 @@ export async function POST(request: NextRequest) {
     const apiKey = process.env.OPENAI_API_KEY;
     const model = process.env.OPENAI_MODEL || "openai/gpt-oss-120b";
     const baseUrl = (process.env.OPENAI_BASE_URL || "https://api.openai.com/v1").replace(/\/$/, "");
-    if (!apiKey) {
-      return NextResponse.json({ error: "AI is not connected. Add OPENAI_API_KEY in Vercel Environment Variables and redeploy." }, { status: 503 });
+    const geminiApiKey = process.env.GEMINI_API_KEY;
+    const cloudflareAccountId = process.env.CLOUDFLARE_ACCOUNT_ID;
+    const cloudflareApiToken = process.env.CLOUDFLARE_API_TOKEN;
+    if (!apiKey && !geminiApiKey && !(cloudflareAccountId && cloudflareApiToken)) {
+      return NextResponse.json({ error: "AI is not connected. Add at least one provider key in Vercel and redeploy." }, { status: 503 });
     }
 
     async function askAgent(
@@ -196,13 +199,103 @@ export async function POST(request: NextRequest) {
         payload.reasoning_effort = "low";
       }
 
-      const sendRequest = (requestPayload: Record<string, unknown>) => fetch(`${baseUrl}/chat/completions`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-        body: JSON.stringify(requestPayload),
-        signal: AbortSignal.timeout(timeoutMs),
-        cache: "no-store"
-      });
+      const sendRequest = async (requestPayload: Record<string, unknown>): Promise<Response> => {
+        const messages = Array.isArray(requestPayload.messages) ? requestPayload.messages as Array<{ role?: string; content?: string }> : [];
+        const controllerOptions = { signal: AbortSignal.timeout(timeoutMs), cache: "no-store" as RequestCache };
+        const attempts: Array<{ name: string; run: () => Promise<Response> }> = [];
+
+        if (apiKey) {
+          attempts.push({
+            name: "Groq",
+            run: () => fetch(`${baseUrl}/chat/completions`, {
+              method: "POST",
+              headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+              body: JSON.stringify(requestPayload),
+              ...controllerOptions
+            })
+          });
+        }
+
+        if (geminiApiKey) {
+          attempts.push({
+            name: "Gemini",
+            run: async () => {
+              const systemText = messages.filter(message => message.role === "system").map(message => message.content || "").join("\\n\\n");
+              const userText = messages.filter(message => message.role !== "system").map(message => `${message.role === "assistant" ? "Assistant" : "User"}:\\n${message.content || ""}`).join("\\n\\n");
+              const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "x-goog-api-key": geminiApiKey },
+                body: JSON.stringify({
+                  systemInstruction: systemText ? { parts: [{ text: systemText }] } : undefined,
+                  contents: [{ role: "user", parts: [{ text: userText }] }],
+                  generationConfig: {
+                    temperature: Number(requestPayload.temperature ?? 0.2),
+                    maxOutputTokens: Number(requestPayload.max_completion_tokens ?? requestPayload.max_tokens ?? 4096),
+                    responseMimeType: "application/json"
+                  }
+                }),
+                ...controllerOptions
+              });
+              if (!response.ok) return response;
+              const data = await response.json();
+              const content = Array.isArray(data.candidates?.[0]?.content?.parts)
+                ? data.candidates[0].content.parts.map((part: { text?: string }) => part.text || "").join("")
+                : "";
+              return Response.json({ choices: [{ message: { content } }] });
+            }
+          });
+        }
+
+        if (cloudflareAccountId && cloudflareApiToken) {
+          attempts.push({
+            name: "Cloudflare Workers AI",
+            run: async () => {
+              const response = await fetch(`https://api.cloudflare.com/client/v4/accounts/${cloudflareAccountId}/ai/run/@cf/meta/llama-3.1-8b-instruct`, {
+                method: "POST",
+                headers: { Authorization: `Bearer ${cloudflareApiToken}`, "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  messages,
+                  max_tokens: Number(requestPayload.max_completion_tokens ?? requestPayload.max_tokens ?? 4096),
+                  temperature: Number(requestPayload.temperature ?? 0.2),
+                  response_format: { type: "json_object" }
+                }),
+                ...controllerOptions
+              });
+              if (!response.ok) return response;
+              const data = await response.json();
+              const content = typeof data.result?.response === "string"
+                ? data.result.response
+                : typeof data.result?.choices?.[0]?.message?.content === "string"
+                  ? data.result.choices[0].message.content
+                  : "";
+              if (!content) return Response.json({ error: { message: "Cloudflare returned an empty model response." } }, { status: 502 });
+              return Response.json({ choices: [{ message: { content } }] });
+            }
+          });
+        }
+
+        let lastResponse: Response | null = null;
+        const failures: string[] = [];
+        for (const attempt of attempts) {
+          try {
+            const response = await attempt.run();
+            if (response.ok) return response;
+            const detail = await response.text();
+            failures.push(`${attempt.name} (${response.status}): ${detail.slice(0, 180)}`);
+            lastResponse = new Response(JSON.stringify({ error: { message: failures[failures.length - 1] } }), {
+              status: response.status,
+              headers: { "Content-Type": "application/json", ...(response.headers.get("retry-after") ? { "Retry-After": response.headers.get("retry-after")! } : {}) }
+            });
+            // A malformed request is unlikely to work on another provider. Auth, quota,
+            // model and transient failures are eligible for fallback.
+            if (response.status === 400 && !/failed to validate json|failed_generation|response_format|json mode/i.test(detail)) break;
+          } catch (error) {
+            failures.push(`${attempt.name}: ${error instanceof Error ? error.message : "network error"}`);
+            lastResponse = Response.json({ error: { message: failures[failures.length - 1] } }, { status: 503 });
+          }
+        }
+        return lastResponse || Response.json({ error: { message: "No AI provider is configured." } }, { status: 503 });
+      };
 
       let response = await sendRequest(payload);
       let detail = "";
