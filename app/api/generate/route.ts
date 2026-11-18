@@ -65,9 +65,9 @@ export async function POST(request: NextRequest) {
       ]
     };
 
-    // Groq's GPT-OSS models require an explicit reasoning format when JSON mode is enabled.
+    // GPT-OSS does not accept reasoning_format; use include_reasoning instead.
     if (model.startsWith("openai/gpt-oss-")) {
-      requestPayload.reasoning_format = "hidden";
+      requestPayload.include_reasoning = false;
     }
 
     const upstream = await fetch(`${baseUrl}/chat/completions`, {
