@@ -207,7 +207,7 @@ export async function POST(request: NextRequest) {
 
       const sendRequest = async (requestPayload: Record<string, unknown>): Promise<Response> => {
         const messages = Array.isArray(requestPayload.messages) ? requestPayload.messages as Array<{ role?: string; content?: string }> : [];
-        const controllerOptions = { signal: AbortSignal.timeout(timeoutMs), cache: "no-store" as RequestCache };
+        const requestOptions = () => ({ signal: AbortSignal.timeout(timeoutMs), cache: "no-store" as RequestCache });
         const attempts: Array<{ name: string; run: () => Promise<Response> }> = [];
 
         if (apiKey && !groqDailyLimitReached) {
@@ -217,7 +217,7 @@ export async function POST(request: NextRequest) {
               method: "POST",
               headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
               body: JSON.stringify(requestPayload),
-              ...controllerOptions
+              ...requestOptions()
             })
           });
         }
@@ -240,7 +240,7 @@ export async function POST(request: NextRequest) {
                     responseMimeType: "application/json"
                   }
                 }),
-                ...controllerOptions
+                ...requestOptions()
               });
               if (!response.ok) return response;
               const data = await response.json();
@@ -265,7 +265,7 @@ export async function POST(request: NextRequest) {
                   temperature: Number(requestPayload.temperature ?? 0.2),
                   response_format: { type: "json_object" }
                 }),
-                ...controllerOptions
+                ...requestOptions()
               });
               if (!response.ok) return response;
               const data = await response.json();
