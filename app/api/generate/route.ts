@@ -301,36 +301,60 @@ export async function POST(request: NextRequest) {
       gameplayBrief: architect.gameplayBrief
     });
 
-    // 2. Environment and gameplay agents build from the same blueprint in parallel.
-    const [environment, gameplay] = await Promise.all([
+    // 2. Specialist agents build the environment, gameplay and interface from one blueprint.
+    const [environment, gameplay, interfaceAgent] = await Promise.all([
       askAgent(
         "Environment Agent",
         `Build the actual Roblox environment from this approved blueprint: ${blueprintContext}
-        Return JSON with buildPlan: array of 18-45 objects {name,parentPath,className,position,size,color,material,shape,rotation,anchored,canCollide,transparency}; files: array of 0-3 objects {path,kind,code}; environmentNotes: array of 2-4 strings.
-        The Studio Connector will create these static 3D objects directly in Workspace. Only create a non-empty buildPlan for Full game or Game map mode; for Gameplay system, UI interface or Lua script mode, return buildPlan: []. parentPath is relative to Workspace, such as "World/SpawnArea" or "World/Platforms". className must be Part or SpawnLocation. position and size use {x,y,z} studs; color uses normalized RGB numbers 0-1; rotation uses degrees; material must be a Roblox Enum.Material name; shape is Block, Ball or Cylinder.
-        Design a coherent playable layout with a floor, spawn point, platforms or paths, boundaries and theme-specific landmarks. Use sensible scale, avoid floating parts and keep the map compact for mobile performance. Do NOT write scripts that recreate the static geometry in buildPlan; files are only for dynamic environment interactions. Every file must be full source code, never pseudocode.`,
-        4800,
+        Return JSON with buildPlan: array of 25-45 objects {name,parentPath,className,position,size,color,material,shape,rotation,anchored,canCollide,transparency}; files: array of 0-3 objects {path,kind,code}; environmentNotes: array of 2-4 strings.
+        The Studio Connector creates these 3D objects directly in Workspace. For Full game or Game map, create a coherent traversable map with spawn, paths/platforms, boundaries, landmarks and distinct areas for the requested worlds/stages. If the game requests many stages/worlds, create a reusable modular layout and include a procedural map-builder Script in files when necessary; do not pretend 40 stages exist if only a few platforms are supplied. For other modes, return buildPlan: [].
+        parentPath is relative to Workspace, such as "World/SpawnArea". className Part or SpawnLocation. Use studs, normalized RGB, Roblox Enum.Material names and sensible mobile-friendly scale. Avoid floating geometry. Every file must be complete Luau source, never pseudocode.`,
+        5000,
         "",
         22000
       ),
       askAgent(
         "Gameplay Agent",
-        `Build playable systems from this approved blueprint: ${blueprintContext}
-        Return JSON with files: array of 4-8 objects {path,kind,code}. For Full game mode, prioritize a playable minimum game over decorative extras: provide complete server, client and shared module scripts. Split independent systems into separate files with matching service paths.
-        Create real gameplay behavior, not empty placeholders. For Game map mode, return files: [] and do not invent gameplay systems. For UI interface mode, focus on the requested interface and its client-side behavior. For Lua script mode, create only the requested script and its essential dependencies. For Full game and Gameplay system modes, include the necessary gameplay systems. Include server-side validation for important state changes, RemoteEvents/RemoteFunctions where needed, safe DataStore handling with pcall and sensible defaults, and a clear client/server split. Avoid duplicating the environment builder. Use paths that clearly identify Roblox services, such as ServerScriptService/Game.server.lua, StarterPlayer/StarterPlayerScripts/HUD.client.lua or ReplicatedStorage/Shared/Config.module.lua. Also return gameplayNotes: array of 2-4 strings. Every file must be full source code, never pseudocode.`,
-        4200,
+        `Build the complete playable game systems from this approved blueprint: ${blueprintContext}
+        Return JSON with files: array of 5-8 objects {path,kind,code}; gameplayNotes: array of 3-5 strings.
+        THIS IS A FULL GAME BUILD, NOT A DEMO OR PLAN. Implement the core gameplay loop described by the user, not generic placeholder code. Include all essential dependencies and a clear server/client split. For a multiplayer game, implement server-authoritative player/session state and safe handling when players join/leave. For progression games, implement the actual currency/reward/progression loop. For stage games, implement checkpoints, completion and respawn. For combat games, implement validated damage, cooldowns and enemy/boss behavior. Use RemoteEvents created safely by the server and validate every client request. Use DataStoreService with pcall, retries or graceful defaults; the game must still run if saving is unavailable in Studio. Use correct Roblox service paths and full scripts. Do not create UI; the Interface Agent owns UI. Do not duplicate static map parts from buildPlan.`,
+        5200,
         "",
         22000
-      )
+      ),
+      mode === "Full game" || mode === "UI interface"
+        ? askAgent(
+            "Roblox UI Agent",
+            `Create the complete player-facing interface for this Roblox project using this blueprint: ${blueprintContext}
+            Return JSON with files: array of 1-3 objects {path,kind,code}; gameplayNotes: array of 2-4 strings.
+            For Full game, provide a polished, mobile-friendly StarterPlayer/StarterPlayerScripts/HUD.client.lua LocalScript that creates its ScreenGui at runtime, scales for touch and desktop, displays the actual game stats/progression, and connects only to RemoteEvents/RemoteFunctions that are part of the blueprint. If no remotes are specified, coordinate names with the Gameplay Agent using conventional names and document them in gameplayNotes. Include clear feedback, readable buttons and safe touch input. Do not implement server-authoritative game logic in the client. For UI interface mode, focus on the requested UI and its client behavior. Return full runnable Luau, not pseudocode.`,
+            2600,
+            "",
+            18000
+          )
+        : Promise.resolve({ files: [], gameplayNotes: [] } as JsonObject)
     ]);
 
     const environmentFiles = validFiles(environment.files, 4);
     const gameplayFiles = validFiles(gameplay.files, 8);
-    const files = uniqueByPath([...environmentFiles, ...gameplayFiles]).slice(0, 12);
+    const interfaceFiles = validFiles(interfaceAgent.files, 3);
+    const files = uniqueByPath([...environmentFiles, ...gameplayFiles, ...interfaceFiles]).slice(0, 16);
 
     const environmentPlan = validScenePlan(environment.buildPlan);
-    if (mode === "Full game" && gameplayFiles.length === 0) {
-      return NextResponse.json({ error: "Gameplay Agent returned no usable Luau scripts. Madara AI stopped the export instead of giving you an empty game ZIP. Try Generate again; if it repeats, check the selected Groq model and API limits." }, { status: 502 });
+    if (mode === "Full game") {
+      const hasServer = files.some(file => file.kind === "server");
+      const hasClient = files.some(file => file.kind === "client");
+      const hasShared = files.some(file => file.kind === "module");
+      if (gameplayFiles.length < 3 || !hasServer || !hasClient || !hasShared) {
+        return NextResponse.json({
+          error: "Madara AI could not complete the game package. A full game must include server gameplay, a client controller and shared configuration/modules. No incomplete ZIP was created. Try Generate again; if it repeats, reduce the game scope or check the Groq model limits."
+        }, { status: 502 });
+      }
+      if (environmentPlan.length < 10) {
+        return NextResponse.json({
+          error: "The environment agent returned too few 3D objects for a complete game map. Madara AI stopped the export rather than labeling an unfinished map as complete. Try again with a smaller or more specific world layout."
+        }, { status: 502 });
+      }
     }
 
     if (files.length === 0 && environmentPlan.length === 0) {
@@ -392,12 +416,14 @@ export async function POST(request: NextRequest) {
       agents: [
         { name: "Game Architect", status: "complete", detail: "Game loop, progression and world blueprint created." },
         { name: "Environment Agent", status: environmentPlan.length > 0 || !["Full game", "Game map"].includes(mode) ? "complete" : "warning", detail: environmentPlan.length > 0 ? `${environmentPlan.length} 3D scene objects planned for direct Studio construction.` : ["Full game", "Game map"].includes(mode) ? "No static 3D scene objects were returned." : "Map generation skipped for this creation mode." },
-        { name: "Gameplay Agent", status: mode === "Game map" || gameplayFiles.length > 0 ? "complete" : "warning", detail: mode === "Game map" ? "Gameplay systems skipped by design for map-only mode." : gameplayFiles.length > 0 ? `${gameplayFiles.length} gameplay or interface scripts generated.` : "No gameplay scripts were returned for this mode." },
+        { name: "Gameplay Agent", status: mode === "Game map" || gameplayFiles.length > 0 ? "complete" : "warning", detail: mode === "Game map" ? "Gameplay systems skipped by design for map-only mode." : gameplayFiles.length > 0 ? `${gameplayFiles.length} gameplay scripts generated.` : "No gameplay scripts were returned for this mode." },
+        { name: "UI Agent", status: mode !== "Full game" && mode !== "UI interface" || interfaceFiles.length > 0 ? "complete" : "warning", detail: mode === "Full game" || mode === "UI interface" ? `${interfaceFiles.length} interface scripts generated.` : "Interface generation skipped for this mode." },
         { name: "Luau Reviewer", status: reviewerCompleted && reviewWarnings.length === 0 ? "complete" : "warning", detail: !reviewerCompleted ? "Automated review did not finish; manual Studio testing is required." : reviewWarnings.length > 0 ? "Review completed with remaining warnings. Read the notes before inserting." : "Project reviewed and concrete fixes applied where needed." }
       ],
       agentNotes: [
         ...strings(environment.environmentNotes, 4),
-        ...strings(gameplay.gameplayNotes, 4),
+        ...strings(gameplay.gameplayNotes, 5),
+        ...strings(interfaceAgent.gameplayNotes, 3),
         ...reviewChecks.map(item => `Review: ${item}`),
         ...reviewWarnings.map(item => `Review warning: ${item}`)
       ],
