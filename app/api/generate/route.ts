@@ -370,8 +370,11 @@ export async function POST(request: NextRequest) {
       22000
     );
 
-    const interfaceAgent = mode === "Full game" || mode === "UI interface"
-      ? await askAgent(
+    let interfaceAgent: JsonObject = { files: [], gameplayNotes: [] };
+    let interfaceAgentError = "";
+    if (mode === "Full game" || mode === "UI interface") {
+      try {
+        interfaceAgent = await askAgent(
           "Roblox UI Agent",
           `Create the complete player-facing interface for this Roblox project using this blueprint: ${blueprintContext}
             Return JSON with files: array of 1-3 objects {path,kind,code}; gameplayNotes: array of 2-4 strings.
@@ -379,8 +382,14 @@ export async function POST(request: NextRequest) {
           1500,
           "",
           18000
-        )
-      : ({ files: [], gameplayNotes: [] } as JsonObject);
+        );
+      } catch (error) {
+        // UI is an optional specialist: a provider TPM limit must not discard
+        // the Architect, environment and gameplay work already completed.
+        interfaceAgentError = error instanceof Error ? error.message : "Roblox UI Agent could not finish.";
+        console.warn("Madara AI UI agent skipped:", interfaceAgentError);
+      }
+    }
 
     const environmentFiles = validFiles(environment.files, 4);
     const gameplayFiles = validFiles(gameplay.files, 8);
@@ -464,13 +473,14 @@ export async function POST(request: NextRequest) {
         { name: "Game Architect", status: "complete", detail: "Game loop, progression and world blueprint created." },
         { name: "Environment Agent", status: environmentPlan.length > 0 || !["Full game", "Game map"].includes(mode) ? "complete" : "warning", detail: environmentPlan.length > 0 ? `${environmentPlan.length} 3D scene objects planned for direct Studio construction.` : ["Full game", "Game map"].includes(mode) ? "No static 3D scene objects were returned." : "Map generation skipped for this creation mode." },
         { name: "Gameplay Agent", status: mode === "Game map" || gameplayFiles.length > 0 ? "complete" : "warning", detail: mode === "Game map" ? "Gameplay systems skipped by design for map-only mode." : gameplayFiles.length > 0 ? `${gameplayFiles.length} gameplay scripts generated.` : "No gameplay scripts were returned for this mode." },
-        { name: "UI Agent", status: mode !== "Full game" && mode !== "UI interface" || interfaceFiles.length > 0 ? "complete" : "warning", detail: mode === "Full game" || mode === "UI interface" ? `${interfaceFiles.length} interface scripts generated.` : "Interface generation skipped for this mode." },
+        { name: "UI Agent", status: mode !== "Full game" && mode !== "UI interface" || interfaceFiles.length > 0 ? "complete" : "warning", detail: mode === "Full game" || mode === "UI interface" ? interfaceFiles.length > 0 ? `${interfaceFiles.length} interface scripts generated.` : interfaceAgentError ? `UI generation skipped so the rest of the game could be saved: ${interfaceAgentError.slice(0, 180)}` : "The UI agent returned no interface scripts." : "Interface generation skipped for this mode." },
         { name: "Luau Reviewer", status: reviewerCompleted && reviewWarnings.length === 0 ? "complete" : "warning", detail: !reviewerCompleted ? "Automated review did not finish; manual Studio testing is required." : reviewWarnings.length > 0 ? "Review completed with remaining warnings. Read the notes before inserting." : "Project reviewed and concrete fixes applied where needed." }
       ],
       agentNotes: [
         ...strings(environment.environmentNotes, 4),
         ...strings(gameplay.gameplayNotes, 5),
         ...strings(interfaceAgent.gameplayNotes, 3),
+        ...(interfaceAgentError ? [`UI Agent note: ${interfaceAgentError.slice(0, 220)}. Core gameplay and map generation were preserved; you can retry UI generation separately.`] : []),
         ...reviewChecks.map(item => `Review: ${item}`),
         ...reviewWarnings.map(item => `Review warning: ${item}`)
       ],
