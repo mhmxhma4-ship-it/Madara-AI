@@ -211,7 +211,7 @@ export async function POST(request: NextRequest) {
       // Wait for the provider's stated cooldown and retry once with a smaller output budget.
       if (response.status === 429) {
         detail = await response.text();
-        const retryMatch = detail.match(/try again in\\s+([0-9.]+)s/i);
+        const retryMatch = detail.match(/try again in\s+([0-9.]+)s/i);
         const headerDelay = Number(response.headers.get("retry-after") || 0);
         const bodyDelay = retryMatch ? Number(retryMatch[1]) : 0;
         const waitMs = Math.min(15000, Math.max(11000, headerDelay * 1000, bodyDelay * 1000) + 500);
