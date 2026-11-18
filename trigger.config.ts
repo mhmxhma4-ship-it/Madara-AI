@@ -5,7 +5,7 @@ export default defineConfig({
   dirs: ["./trigger"],
   runtime: "node",
   logLevel: "info",
-  maxDuration: 3600,
+  maxDuration: 7200,
   retries: {
     enabledInDev: false,
     default: {
