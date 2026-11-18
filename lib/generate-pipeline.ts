@@ -1,5 +1,3 @@
-import { NextRequest, NextResponse } from "next/server";
-
 export type BuildMode = "Full game" | "Game map" | "Gameplay system" | "UI interface" | "Lua script";
 type GeneratedFile = { path: string; kind: "server" | "client" | "module"; code: string };
 type ScenePart = {
@@ -122,11 +120,11 @@ function findUnsafePatterns(files: GeneratedFile[]) {
 }
 
 
-export async function runGenerationPipeline(request: NextRequest) {
+export async function runGenerationPipeline(request: Request) {
   try {
     const contentLength = Number(request.headers.get("content-length") || 0);
     if (contentLength > 24_000) {
-      return NextResponse.json({ error: "The request is too large. Shorten your game description and try again." }, { status: 413 });
+      return Response.json({ error: "The request is too large. Shorten your game description and try again." }, { status: 413 });
     }
 
     const forwardedFor = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
@@ -135,7 +133,7 @@ export async function runGenerationPipeline(request: NextRequest) {
       const now = Date.now();
       const bucket = requestBuckets.get(clientIp);
       if (bucket && bucket.resetAt > now && bucket.count >= MAX_REQUESTS_PER_WINDOW) {
-        return NextResponse.json(
+        return Response.json(
           { error: "Generation limit reached for this minute. Wait a little and try again." },
           { status: 429, headers: { "Retry-After": String(Math.ceil((bucket.resetAt - now) / 1000)) } }
         );
@@ -157,10 +155,10 @@ export async function runGenerationPipeline(request: NextRequest) {
     const mode = body.mode as BuildMode;
 
     if (!prompt || prompt.length > MAX_PROMPT_LENGTH) {
-      return NextResponse.json({ error: "Write a game idea between 1 and 5000 characters." }, { status: 400 });
+      return Response.json({ error: "Write a game idea between 1 and 5000 characters." }, { status: 400 });
     }
     if (!allowedModes.includes(mode)) {
-      return NextResponse.json({ error: "Choose a valid creation mode." }, { status: 400 });
+      return Response.json({ error: "Choose a valid creation mode." }, { status: 400 });
     }
 
     // Remove accidental whitespace/newlines from Vercel environment values before using them in headers.
@@ -172,7 +170,7 @@ export async function runGenerationPipeline(request: NextRequest) {
     const cloudflareAccountId = cleanSecret(process.env.CLOUDFLARE_ACCOUNT_ID);
     const cloudflareApiToken = cleanSecret(process.env.CLOUDFLARE_API_TOKEN);
     if (!apiKey && !geminiApiKey && !(cloudflareAccountId && cloudflareApiToken)) {
-      return NextResponse.json({ error: "AI is not connected. Add at least one provider key in Vercel and redeploy." }, { status: 503 });
+      return Response.json({ error: "AI is not connected. Add at least one provider key in Vercel and redeploy." }, { status: 503 });
     }
 
     // Keep the whole multi-agent pipeline inside Vercel's function window.
@@ -514,19 +512,19 @@ export async function runGenerationPipeline(request: NextRequest) {
       const hasClient = files.some(file => file.kind === "client");
       const hasShared = files.some(file => file.kind === "module");
       if (gameplayFiles.length < 3 || !hasServer || !hasClient || !hasShared) {
-        return NextResponse.json({
+        return Response.json({
           error: "Madara AI could not complete the game package. A full game must include server gameplay, a client controller and shared configuration/modules. No incomplete ZIP was created. Try Generate again; if it repeats, reduce the game scope or check the Groq model limits."
         }, { status: 502 });
       }
       if (environmentPlan.length < 10) {
-        return NextResponse.json({
+        return Response.json({
           error: "The environment agent returned too few 3D objects for a complete game map. Madara AI stopped the export rather than labeling an unfinished map as complete. Try again with a smaller or more specific world layout."
         }, { status: 502 });
       }
     }
 
     if (files.length === 0 && environmentPlan.length === 0) {
-      return NextResponse.json({ error: "The agents completed the plan but did not return usable scripts or 3D scene objects. Try a more specific idea." }, { status: 502 });
+      return Response.json({ error: "The agents completed the plan but did not return usable scripts or 3D scene objects. Try a more specific idea." }, { status: 502 });
     }
 
     // 3. Reviewer: inspect the combined project and repair concrete defects.
@@ -565,7 +563,7 @@ export async function runGenerationPipeline(request: NextRequest) {
     // 4. Deterministic safety gate: never silently ship known-dangerous patterns.
     const safetyFindings = findUnsafePatterns(files);
     if (safetyFindings.length > 0) {
-      return NextResponse.json({
+      return Response.json({
         error: "The generated project failed Madara AI's safety checks. Generate again with a simpler request.",
         safetyFindings
       }, { status: 422 });
@@ -574,7 +572,7 @@ export async function runGenerationPipeline(request: NextRequest) {
     const strings = (value: unknown, max = 12) =>
       Array.isArray(value) ? value.filter((item): item is string => typeof item === "string").slice(0, max) : [];
 
-    return NextResponse.json({
+    return Response.json({
       projectName: typeof architect.projectName === "string" ? architect.projectName.slice(0, 100) : "My Roblox Game",
       summary: typeof architect.summary === "string" ? architect.summary : "A Roblox project planned and built by Madara AI agents.",
       gameDesign: typeof architect.gameDesign === "string" ? architect.gameDesign : "",
@@ -603,11 +601,11 @@ export async function runGenerationPipeline(request: NextRequest) {
     console.error("Madara AI pipeline error:", error);
     const message = error instanceof Error ? error.message : "";
     if (message.includes("Game Architect:") || message.includes("Environment Agent:") || message.includes("Gameplay Agent:") || message.includes("Roblox UI Agent:")) {
-      return NextResponse.json({ error: message }, { status: 502 });
+      return Response.json({ error: message }, { status: 502 });
     }
     if (error instanceof Error && error.name === "TimeoutError") {
-      return NextResponse.json({ error: "An AI agent took too long to respond. Try a smaller game idea." }, { status: 504 });
+      return Response.json({ error: "An AI agent took too long to respond. Try a smaller game idea." }, { status: 504 });
     }
-    return NextResponse.json({ error: message || "Something went wrong in the Madara AI agent pipeline." }, { status: 500 });
+    return Response.json({ error: message || "Something went wrong in the Madara AI agent pipeline." }, { status: 500 });
   }
 }
