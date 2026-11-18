@@ -10,6 +10,9 @@ type JsonObject = Record<string, unknown>;
 const allowedModes: BuildMode[] = ["Full game", "Game map", "Gameplay system", "UI interface", "Lua script"];
 const MAX_PROMPT_LENGTH = 5000;
 const MAX_FILE_LENGTH = 60000;
+const RATE_WINDOW_MS = 60_000;
+const MAX_REQUESTS_PER_WINDOW = 3;
+const requestBuckets = new Map<string, { count: number; resetAt: number }>();
 
 const safeError = (status: number) => {
   if (status === 401) return "Groq rejected the API key. Check OPENAI_API_KEY in Vercel.";
@@ -74,6 +77,34 @@ function findUnsafePatterns(files: GeneratedFile[]) {
 
 export async function POST(request: NextRequest) {
   try {
+    const contentLength = Number(request.headers.get("content-length") || 0);
+    if (contentLength > 24_000) {
+      return NextResponse.json({ error: "The request is too large. Shorten your game description and try again." }, { status: 413 });
+    }
+
+    const forwardedFor = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
+    const clientIp = request.headers.get("x-real-ip") || forwardedFor;
+    if (clientIp) {
+      const now = Date.now();
+      const bucket = requestBuckets.get(clientIp);
+      if (bucket && bucket.resetAt > now && bucket.count >= MAX_REQUESTS_PER_WINDOW) {
+        return NextResponse.json(
+          { error: "Generation limit reached for this minute. Wait a little and try again." },
+          { status: 429, headers: { "Retry-After": String(Math.ceil((bucket.resetAt - now) / 1000)) } }
+        );
+      }
+      if (!bucket || bucket.resetAt <= now) {
+        requestBuckets.set(clientIp, { count: 1, resetAt: now + RATE_WINDOW_MS });
+      } else {
+        bucket.count += 1;
+      }
+      if (requestBuckets.size > 2000) {
+        for (const [ip, entry] of requestBuckets) {
+          if (entry.resetAt <= now) requestBuckets.delete(ip);
+        }
+      }
+    }
+
     const body = await request.json();
     const prompt = typeof body.prompt === "string" ? body.prompt.trim() : "";
     const mode = body.mode as BuildMode;
