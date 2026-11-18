@@ -5,8 +5,14 @@ import { ArrowUp, Bot, Check, Code2, Copy, Download, ExternalLink, Gamepad2, Git
 
 type GeneratedFile = { path: string; kind: string; code: string };
 type Agent = { name: string; status: string; detail: string };
+type ScenePart = {
+  name: string; parentPath: string; className: "Part" | "SpawnLocation";
+  position: { x: number; y: number; z: number };
+  size: { x: number; y: number; z: number };
+  color: { r: number; g: number; b: number };
+};
 type Project = {
-  environmentPlan?: Array<Record<string, unknown>>;
+  environmentPlan?: ScenePart[];
   projectName: string; summary: string; gameDesign?: string; worldPlan?: string[];
   systemsPlan?: string[]; instructions: string[]; files: GeneratedFile[];
   agents?: Agent[]; agentNotes?: string[];
@@ -81,6 +87,36 @@ function PublishNowPanel() {
     <p className="publish-security">Your API key is sent only for this request and is not saved by Madara AI. Use a key limited to the target experience with <strong>universe-places: Write</strong> permission. Current generator output is a script bundle; export a real .rbxlx/.rbxl from Studio before using this publisher.</p>
     <a className="publish-doc-link" href="https://create.roblox.com/docs/cloud/guides/usage-place-publishing" target="_blank" rel="noreferrer">Roblox publishing setup guide <ExternalLink size={13}/></a>
   </section>;
+}
+
+function ScenePlanPreview({ parts }: { parts: ScenePart[] }) {
+  if (!parts.length) return null;
+  const minX = Math.min(...parts.map(part => part.position.x - part.size.x / 2));
+  const maxX = Math.max(...parts.map(part => part.position.x + part.size.x / 2));
+  const minZ = Math.min(...parts.map(part => part.position.z - part.size.z / 2));
+  const maxZ = Math.max(...parts.map(part => part.position.z + part.size.z / 2));
+  const spanX = Math.max(1, maxX - minX);
+  const spanZ = Math.max(1, maxZ - minZ);
+
+  return <div className="scene-preview-card">
+    <div className="scene-preview-heading"><Globe2 size={15}/> TOP-DOWN MAP PREVIEW <span>{parts.length} objects</span></div>
+    <div className="scene-preview-canvas">
+      {parts.map(part => {
+        const left = 4 + ((part.position.x - part.size.x / 2 - minX) / spanX) * 92;
+        const top = 4 + ((part.position.z - part.size.z / 2 - minZ) / spanZ) * 92;
+        const width = Math.max(1.5, Math.min(40, (part.size.x / spanX) * 92));
+        const height = Math.max(1.5, Math.min(40, (part.size.z / spanZ) * 92));
+        const color = "rgb(" + Math.round(part.color.r * 255) + ", " + Math.round(part.color.g * 255) + ", " + Math.round(part.color.b * 255) + ")";
+        return <div
+          key={part.parentPath + "/" + part.name}
+          className={part.className === "SpawnLocation" ? "scene-preview-part scene-preview-spawn" : "scene-preview-part"}
+          title={part.name}
+          style={{ left: left + "%", top: top + "%", width: width + "%", height: height + "%", backgroundColor: color }}
+        />;
+      })}
+    </div>
+    <p>Approximate top-down layout. Final geometry is created in Roblox Studio by the connector.</p>
+  </div>;
 }
 
 function StudioConnectorPanel() {
@@ -245,6 +281,7 @@ export default function Home() {
       <div className="result-heading"><div><div className="section-kicker">YOUR GENERATED PROJECT</div><h2>{project.projectName}</h2><p>{project.summary}</p></div><button className="download-button" onClick={downloadProject}><Download size={16}/> Download project ZIP</button></div>
 
       {(project.environmentPlan?.length ?? 0) > 0 && <div className="scene-plan-note"><Globe2 size={16}/> <strong>{project.environmentPlan?.length} 3D objects</strong> are ready for direct construction by the Madara AI Studio Connector.</div>}
+      {(project.environmentPlan?.length ?? 0) > 0 && <ScenePlanPreview parts={project.environmentPlan || []} />}
       {project.agents && <div className="agent-results"><div className="agent-results-title"><Workflow size={17}/> AGENT WORKFLOW <span>{project.agents.filter(agent => agent.status === "complete").length} / {project.agents.length} PASSED</span></div><div className="agent-results-grid">{project.agents.map(agent => <article className={agent.status === "warning" ? "agent-result agent-result-warning" : "agent-result"} key={agent.name}><div className="agent-result-icon">{agent.status === "warning" ? <X size={15}/> : <Check size={15}/>}</div><strong>{agent.name}</strong><p>{agent.detail}</p></article>)}</div></div>}
 
       {(project.gameDesign || (project.worldPlan?.length ?? 0) > 0 || (project.systemsPlan?.length ?? 0) > 0) && <div className="blueprint-card">
