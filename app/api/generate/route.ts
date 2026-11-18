@@ -16,11 +16,13 @@ Rules:
 - Never use loadstring, external executors, exploit APIs, hidden admin backdoors, or require(assetId) for unknown code.
 - Use RemoteEvents/RemoteFunctions with validation and rate limits where needed.
 - Include clear file paths under ServerScriptService, ReplicatedStorage, StarterPlayerScripts, StarterGui, or Workspace setup instructions.
-- Keep each file focused and include all required scripts/modules for the requested scope.
-- For maps, generate a build script that creates the map using Parts, Models, Lighting and safe Roblox APIs. Explain where to run it in Studio.
-- For full games, create a playable MVP, not an empty template. Include setup instructions and a sensible folder structure.
+- Prioritize a working, simple MVP over a huge project.
+- Generate no more than 4 files. Keep each file concise and focused; do not duplicate code.
+- For maps, generate one build script using Parts, Models, Lighting and safe Roblox APIs. Explain where to run it in Studio.
+- For full games, create a playable MVP with only essential systems and setup instructions.
 - Do not claim the project has been tested or published.
-- Keep output concise enough to fit a normal response. Generate up to 8 files.`;
+- Put only source code in each code field, without Markdown fences.
+- Keep the complete JSON response compact enough to finish in one response.`;
 
 function providerError(status: number) {
   if (status === 401) return "Groq rejected the API key. Check that OPENAI_API_KEY contains your Groq key.";
@@ -94,10 +96,11 @@ export async function POST(request: NextRequest) {
       ]
     };
 
-    // Groq requires parsed or hidden reasoning when GPT-OSS uses JSON mode.
-    // "parsed" keeps reasoning separate from message.content, so JSON validation sees only JSON.
-    if (model.startsWith("openai/gpt-oss-")) {
-      requestPayload.reasoning_format = "parsed";
+    // GPT-OSS handles reasoning separately by default. Do not send reasoning_format:
+    // Groq's current documentation says this parameter is not supported for GPT-OSS.
+    if (model.startsWith("openai/gpt-oss-120b") || model.startsWith("openai/gpt-oss-20b")) {
+      requestPayload.reasoning_effort = "low";
+      requestPayload.max_completion_tokens = 8192;
     }
 
     const requestHeaders = {
