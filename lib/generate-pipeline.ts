@@ -441,7 +441,7 @@ export async function runGenerationPipeline(request: Request) {
       Define the core gameplay loop, player goals, progression, rewards, failure/retry loop and multiplayer assumptions. Do not invent unrelated themes. Define a premium realistic 3D art direction with believable proportions, natural colors, realistic materials, lighting and weather. Do not choose Minecraft, voxel, blocky or low-poly aesthetics unless explicitly requested.`,
       2200,
       "",
-      10000
+      20 * 60_000
     );
 
     const blueprintContext = JSON.stringify({
@@ -498,7 +498,7 @@ export async function runGenerationPipeline(request: Request) {
         console.warn("Madara AI UI agent skipped:", interfaceAgentError);
       }
     } else if (mode === "Full game" || mode === "UI interface") {
-      interfaceAgentError = "UI generation was skipped to preserve the core game package within the serverless time limit.";
+      interfaceAgentError = "UI generation was skipped to preserve the core game package within the task time limit.";
     }
 
     const environmentFiles = validFiles(environment.files, 4);
