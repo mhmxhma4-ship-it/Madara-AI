@@ -300,9 +300,10 @@ generateButton.Activated:Connect(function()
 			end
 		end
 	end
+	local sceneCount = type(decoded.environmentPlan) == "table" and #decoded.environmentPlan or 0
 	setStatus(
 		"Project ready: " .. tostring(decoded.projectName or "Roblox Game")
-			.. "\n" .. tostring(#decoded.files) .. " files generated."
+			.. "\n" .. tostring(#decoded.files) .. " scripts + " .. tostring(sceneCount) .. " 3D objects."
 			.. (warningCount > 0 and (" Review warnings: " .. tostring(warningCount) .. ".") or "")
 			.. "\nTap Insert only after reviewing the project.",
 		warningCount > 0 and Color3.fromRGB(255, 190, 90) or COLORS.green
@@ -403,11 +404,11 @@ local function insertScenePart(part: any): (boolean, string)
 	if type(part) ~= "table" or type(part.name) ~= "string" then return false, "Invalid 3D object entry." end
 	local parentPath = type(part.parentPath) == "string" and part.parentPath or "World"
 	if #parentPath > 120 or string.find(parentPath, "..", 1, true) or string.find(parentPath, "\\", 1, true) then return false, "Blocked unsafe scene folder path." end
-	local parent: Instance = workspace
+	local parent: Instance = workspace:FindFirstChild("MadaraAI_Generated") or workspace
 	for _, segment in ipairs(string.split(parentPath, "/")) do
 		if segment == "" or segment == "." or string.find(segment, "[<>:\"|%?%*]") then return false, "Invalid scene folder name." end
 		local folder = parent:FindFirstChild(segment)
-		if folder and folder:IsA("LuaSourceContainer") then return false, "A script blocks the scene folder path: " .. segment end
+		if folder and not folder:IsA("Folder") and not folder:IsA("Model") then return false, "A non-container object blocks the scene folder path: " .. segment end
 		if not folder then
 			local created = Instance.new("Folder")
 			created.Name = segment
@@ -463,7 +464,7 @@ insertButton.Activated:Connect(function()
 	end
 	if not pendingInsertConfirmation then
 		pendingInsertConfirmation = true
-		setStatus("Confirm this insert: scripts with matching paths will be updated. Press Insert again to continue.", Color3.fromRGB(255, 190, 90))
+		setStatus("Confirm insert: matching scripts will update and the MadaraAI_Generated map folder will be replaced. Press Insert again to continue.", Color3.fromRGB(255, 190, 90))
 		return
 	end
 	pendingInsertConfirmation = false
@@ -486,7 +487,16 @@ insertButton.Activated:Connect(function()
 			table.insert(failures, callOk and message or tostring(ok))
 		end
 	end
-	if type(generatedProject.environmentPlan) == "table" then
+	if type(generatedProject.environmentPlan) == "table" and #generatedProject.environmentPlan > 0 then
+		local previousMap = workspace:FindFirstChild("MadaraAI_Generated")
+		if previousMap and not previousMap:IsA("Folder") then
+			table.insert(failures, "Workspace.MadaraAI_Generated exists but is not a Folder.")
+		else
+			if previousMap then previousMap:Destroy() end
+			local newMap = Instance.new("Folder")
+			newMap.Name = "MadaraAI_Generated"
+			newMap.Parent = workspace
+		end
 		for _, part in ipairs(generatedProject.environmentPlan) do
 			local callOk, ok, message = pcall(insertScenePart, part)
 			if callOk and ok then
