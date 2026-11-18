@@ -489,20 +489,24 @@ insertButton.Activated:Connect(function()
 	end
 	if type(generatedProject.environmentPlan) == "table" and #generatedProject.environmentPlan > 0 then
 		local previousMap = workspace:FindFirstChild("MadaraAI_Generated")
+		local canBuildScene = true
 		if previousMap and not previousMap:IsA("Folder") then
 			table.insert(failures, "Workspace.MadaraAI_Generated exists but is not a Folder.")
+			canBuildScene = false
 		else
 			if previousMap then previousMap:Destroy() end
 			local newMap = Instance.new("Folder")
 			newMap.Name = "MadaraAI_Generated"
 			newMap.Parent = workspace
 		end
-		for _, part in ipairs(generatedProject.environmentPlan) do
-			local callOk, ok, message = pcall(insertScenePart, part)
-			if callOk and ok then
-				objectsInserted += 1
-			else
-				table.insert(failures, callOk and message or tostring(ok))
+		if canBuildScene then
+			for _, part in ipairs(generatedProject.environmentPlan) do
+				local callOk, ok, message = pcall(insertScenePart, part)
+				if callOk and ok then
+					objectsInserted += 1
+				else
+					table.insert(failures, callOk and message or tostring(ok))
+				end
 			end
 		end
 	end
