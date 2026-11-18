@@ -171,7 +171,8 @@ export async function POST(request: NextRequest) {
       agentName: string,
       instructions: string,
       maxTokens = 4096,
-      extraContext = ""
+      extraContext = "",
+      timeoutMs = 16000
     ): Promise<JsonObject> {
       const payload: Record<string, unknown> = {
         model,
@@ -194,7 +195,7 @@ export async function POST(request: NextRequest) {
         method: "POST",
         headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
         body: JSON.stringify(payload),
-        signal: AbortSignal.timeout(16000),
+        signal: AbortSignal.timeout(timeoutMs),
         cache: "no-store"
       });
 
@@ -225,7 +226,9 @@ export async function POST(request: NextRequest) {
       worldPlan (array of 3-8 concise strings), systemsPlan (array of 3-10 strings),
       environmentBrief (string), gameplayBrief (string), instructions (array of 3-8 strings).
       Define the core gameplay loop, player goals, progression, rewards, failure/retry loop and multiplayer assumptions. Do not invent unrelated themes.`,
-      2200
+      2200,
+      "",
+      12000
     );
 
     const blueprintContext = JSON.stringify({
@@ -246,14 +249,18 @@ export async function POST(request: NextRequest) {
         Return JSON with buildPlan: array of 18-45 objects {name,parentPath,className,position,size,color,material,shape,rotation,anchored,canCollide,transparency}; files: array of 0-3 objects {path,kind,code}; environmentNotes: array of 2-4 strings.
         The Studio Connector will create these static 3D objects directly in Workspace. parentPath is relative to Workspace, such as "World/SpawnArea" or "World/Platforms". className must be Part or SpawnLocation. position and size use {x,y,z} studs; color uses normalized RGB numbers 0-1; rotation uses degrees; material must be a Roblox Enum.Material name; shape is Block, Ball or Cylinder.
         Design a coherent playable layout with a floor, spawn point, platforms or paths, boundaries and theme-specific landmarks. Use sensible scale, avoid floating parts and keep the map compact for mobile performance. Do NOT write scripts that recreate the static geometry in buildPlan; files are only for dynamic environment interactions. Every file must be full source code, never pseudocode.`,
-        4800
+        4800,
+        "",
+        22000
       ),
       askAgent(
         "Gameplay Agent",
         `Build playable systems from this approved blueprint: ${blueprintContext}
         Return JSON with files: array of 1-5 objects {path,kind,code}.
         Create real gameplay behavior, not empty placeholders. Include server-side validation for all important state changes, RemoteEvents/RemoteFunctions where needed, safe DataStore handling with pcall and sensible defaults, and a clear client/server split. Avoid duplicating the environment builder. Use paths that clearly identify Roblox services, such as ServerScriptService/Game.server.lua, StarterPlayer/StarterPlayerScripts/HUD.client.lua or ReplicatedStorage/Shared/Config.module.lua. Also return gameplayNotes: array of 2-4 strings. Every file must be full source code, never pseudocode.`,
-        4200
+        4200,
+        "",
+        22000
       )
     ]);
 
@@ -278,7 +285,8 @@ export async function POST(request: NextRequest) {
         files: array containing corrected full files {path,kind,code}; qualityChecks: array of concise checks performed; warnings: array of genuine remaining risks; sceneWarnings: array of map-specific issues.
         IMPORTANT: Return a corrected file only when you made a real improvement. Preserve the exact path and kind for every corrected file. Do not rewrite working code just for style. Do not add unrelated systems. If a file is already sound, omit it from files. Never say code was executed or tested.`,
         3000,
-        JSON.stringify({ blueprint: architect, files, environmentPlan })
+        JSON.stringify({ blueprint: architect, files, environmentPlan }),
+        14000
       );
       const corrected = validFiles(review.files, 8);
       for (const fix of corrected) {
