@@ -284,7 +284,23 @@ export async function POST(request: NextRequest) {
         const failures: string[] = [];
         for (const attempt of attempts) {
           try {
-            const response = await attempt.run();
+            let response: Response | null = null;
+            // Gemini can temporarily return 503 during demand spikes.
+            // Retry once with a fresh timeout before moving to the next provider.
+            const maxAttempts = attempt.name === "Gemini" ? 2 : 1;
+            for (let providerTry = 0; providerTry < maxAttempts; providerTry++) {
+              try {
+                response = await attempt.run();
+              } catch (error) {
+                if (providerTry + 1 >= maxAttempts) throw error;
+                await new Promise(resolve => setTimeout(resolve, 900));
+                continue;
+              }
+              if (response.status !== 503 || providerTry + 1 >= maxAttempts) break;
+              await response.text();
+              await new Promise(resolve => setTimeout(resolve, 900));
+            }
+            if (!response) throw new Error("Provider did not return a response.");
             if (response.ok) return response;
             const detail = await response.text();
             if (attempt.name === "Groq" && response.status === 429 && /tokens per day|token[s]? per day|\bTPD\b/i.test(detail)) {
