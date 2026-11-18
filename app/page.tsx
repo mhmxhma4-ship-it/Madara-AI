@@ -87,11 +87,11 @@ function StudioConnectorPanel() {
   return <section className="studio-connector-panel" id="studio-connector">
     <div className="section-kicker">ROBLOX STUDIO INTEGRATION</div>
     <h2>Build inside Roblox Studio.</h2>
-    <p>Use the Madara AI Studio Connector to send a game idea from Studio, generate the project and insert its scripts into the correct Roblox services.</p>
+    <p>Use the Madara AI Studio Connector to send a game idea from Studio, construct the 3D map in Workspace and insert scripts into the correct Roblox services.</p>
     <div className="studio-connector-steps">
       <span><strong>01</strong> Install the local Studio plugin</span>
       <span><strong>02</strong> Generate with Madara AI agents</span>
-      <span><strong>03</strong> Review and insert scripts</span>
+      <span><strong>03</strong> Build the map and insert scripts</span>
       <span><strong>04</strong> Test in Play mode</span>
     </div>
     <a className="generate-button studio-plugin-link" href="https://raw.githubusercontent.com/mhmxhma4-ship-it/Madara-AI/main/roblox-plugin/MadaraAI.plugin.lua" target="_blank" rel="noreferrer">Open Studio Connector source <ExternalLink size={15}/></a>
