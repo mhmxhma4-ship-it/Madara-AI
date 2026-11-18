@@ -293,6 +293,11 @@ generateButton.Activated:Connect(function()
 	generatedProject = decoded
 	pendingInsertConfirmation = false
 	local warningCount = 0
+	if type(decoded.agents) == "table" then
+		for _, agent in ipairs(decoded.agents) do
+			if type(agent) == "table" and agent.status == "warning" then warningCount += 1 end
+		end
+	end
 	if type(decoded.agentNotes) == "table" then
 		for _, note in ipairs(decoded.agentNotes) do
 			if type(note) == "string" and string.find(string.lower(note), "warning", 1, true) then
