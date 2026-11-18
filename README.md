@@ -67,3 +67,6 @@ A source plugin is included at [roblox-plugin/MadaraAI.plugin.lua](roblox-plugin
 The plugin uses Roblox Studio's plugin HTTP permission prompt for the Madara AI domain. It does not need your Roblox password, cookie, or publishing API key. Generated scripts are inserted into service paths and same-path scripts may be updated. The map is built inside `Workspace/MadaraAI_Generated`; that dedicated folder is replaced on the next map insert. Studio undo recording is used for the insertion. Roblox Studio is required — this plugin cannot run inside the Roblox iPhone app.
 
 For ZIP import, install [Rojo](https://rojo.space/) and use its build/sync workflow. Official references: [Create and install Studio plugins](https://create.roblox.com/docs/studio/plugins) · [HTTP requests from plugins](https://create.roblox.com/docs/cloud-services/http-service)
+
+
+Next 15 ESLint uses the compatibility layer for its legacy presets.
