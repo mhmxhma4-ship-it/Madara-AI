@@ -206,6 +206,25 @@ export async function POST(request: NextRequest) {
 
       let response = await sendRequest(payload);
       let detail = "";
+
+      // Groq free/on-demand TPM windows can reject parallel specialist agents.
+      // Wait for the provider's stated cooldown and retry once with a smaller output budget.
+      if (response.status === 429) {
+        detail = await response.text();
+        const retryMatch = detail.match(/try again in\\s+([0-9.]+)s/i);
+        const headerDelay = Number(response.headers.get("retry-after") || 0);
+        const bodyDelay = retryMatch ? Number(retryMatch[1]) : 0;
+        const waitMs = Math.min(15000, Math.max(11000, headerDelay * 1000, bodyDelay * 1000) + 500);
+        await new Promise(resolve => setTimeout(resolve, waitMs));
+        const retryPayload = {
+          ...payload,
+          max_completion_tokens: Math.max(900, Math.floor(maxTokens * 0.65)),
+          temperature: 0.1
+        };
+        response = await sendRequest(retryPayload);
+        if (!response.ok) detail = await response.text();
+      }
+
       // Groq can reject constrained JSON generation for some GPT-OSS outputs.
       // Retry once in ordinary chat mode while keeping the strict JSON instruction.
       if (!response.ok) {
@@ -309,7 +328,7 @@ export async function POST(request: NextRequest) {
         Return JSON with buildPlan: array of 25-45 objects {name,parentPath,className,position,size,color,material,shape,rotation,anchored,canCollide,transparency}; files: array of 0-3 objects {path,kind,code}; environmentNotes: array of 2-4 strings.
         The Studio Connector creates these 3D objects directly in Workspace. REALISM IS A HARD REQUIREMENT: never make the map look like Minecraft, voxel art, low-poly or a primitive blockout unless the user explicitly requests that style. Build a believable premium 3D environment with natural terrain and elevation, organic paths/coastlines/cliffs where relevant, varied building silhouettes, layered facades, roofs, windows, trim, realistic-scale props, vegetation, rocks and environmental detail. Never build the whole world from giant cubes or repetitive flat platforms. Since buildPlan supports basic Parts only, use Environment Agent Luau builder scripts to create advanced details and Roblox Terrain via Terrain:FillBlock, FillBall and FillWedge, plus decorative models from varied primitives; do not rely on unknown mesh asset IDs. Add a dedicated environment setup script for Lighting, Atmosphere, clouds, color correction and appropriate post effects. Use realistic Roblox materials such as Ground, Grass, Rock, Slate, Concrete, Asphalt, Wood, Glass, Metal, Water, Sand and Snow with restrained natural colors. For Full game or Game map, create a coherent traversable map with spawn, natural paths, boundaries, landmarks and distinct requested areas. For many stages/worlds, build a reusable modular layout and procedural builder; do not pretend they exist if only a few platforms are supplied. Return 25-45 useful structural objects, not filler. For other modes, return buildPlan: [].
         parentPath is relative to Workspace, such as "World/SpawnArea". className Part or SpawnLocation. Use studs and believable scale. Avoid floating geometry. Every file must be complete Luau source, never pseudocode.`,
-        5000,
+        3400,
         "",
         22000
       ),
@@ -318,7 +337,7 @@ export async function POST(request: NextRequest) {
         `Build the complete playable game systems from this approved blueprint: ${blueprintContext}
         Return JSON with files: array of 5-8 objects {path,kind,code}; gameplayNotes: array of 3-5 strings.
         THIS IS A FULL GAME BUILD, NOT A DEMO OR PLAN. Implement the core gameplay loop described by the user, not generic placeholder code. Include all essential dependencies and a clear server/client split. For a multiplayer game, implement server-authoritative player/session state and safe handling when players join/leave. For progression games, implement the actual currency/reward/progression loop. For stage games, implement checkpoints, completion and respawn. For combat games, implement validated damage, cooldowns and enemy/boss behavior. Use RemoteEvents created safely by the server and validate every client request. Use DataStoreService with pcall, retries or graceful defaults; the game must still run if saving is unavailable in Studio. Use correct Roblox service paths and full scripts. Do not create UI; the Interface Agent owns UI. Do not duplicate static map parts from buildPlan.`,
-        5200,
+        3800,
         "",
         22000
       ),
@@ -328,7 +347,7 @@ export async function POST(request: NextRequest) {
             `Create the complete player-facing interface for this Roblox project using this blueprint: ${blueprintContext}
             Return JSON with files: array of 1-3 objects {path,kind,code}; gameplayNotes: array of 2-4 strings.
             For Full game, provide a polished premium mobile-friendly StarterPlayer/StarterPlayerScripts/HUD.client.lua LocalScript that creates its ScreenGui at runtime, scales for touch and desktop, displays the actual game stats/progression, and connects only to RemoteEvents/RemoteFunctions that are part of the blueprint. Use modern high-quality game HUD design, clean typography, restrained colors, subtle gradients and strokes, consistent spacing and responsive controls; never use childish blocky/Minecraft-style UI unless requested. If no remotes are specified, coordinate names with the Gameplay Agent using conventional names and document them in gameplayNotes. Include clear feedback, readable buttons and safe touch input. Do not implement server-authoritative game logic in the client. For UI interface mode, focus on the requested UI and its client behavior. Return full runnable Luau, not pseudocode.`,
-            2600,
+            1500,
             "",
             18000
           )
