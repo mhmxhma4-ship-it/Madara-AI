@@ -316,7 +316,7 @@ export async function POST(request: NextRequest) {
       instructions: strings(architect.instructions, 12),
       agents: [
         { name: "Game Architect", status: "complete", detail: "Game loop, progression and world blueprint created." },
-        { name: "Environment Agent", status: "complete", detail: `${environmentPlan.length} 3D scene objects planned for direct Studio construction.` },
+        { name: "Environment Agent", status: environmentPlan.length > 0 || !["Full game", "Game map"].includes(mode) ? "complete" : "warning", detail: environmentPlan.length > 0 ? `${environmentPlan.length} 3D scene objects planned for direct Studio construction.` : "No static 3D scene objects were returned; this project contains scripts only." },
         { name: "Gameplay Agent", status: "complete", detail: "Gameplay systems and client/server scripts generated." },
         { name: "Luau Reviewer", status: reviewerCompleted ? "complete" : "warning", detail: reviewerCompleted ? "Project reviewed and concrete fixes applied where needed." : "Automated review did not finish; manual Studio testing is required." }
       ],
