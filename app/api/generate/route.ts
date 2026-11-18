@@ -65,9 +65,10 @@ export async function POST(request: NextRequest) {
       ]
     };
 
-    // GPT-OSS does not accept reasoning_format; use include_reasoning instead.
+    // Groq requires parsed or hidden reasoning when GPT-OSS uses JSON mode.
+    // "parsed" keeps reasoning separate from message.content, so JSON validation sees only JSON.
     if (model.startsWith("openai/gpt-oss-")) {
-      requestPayload.include_reasoning = false;
+      requestPayload.reasoning_format = "parsed";
     }
 
     const requestHeaders = {
@@ -88,10 +89,11 @@ export async function POST(request: NextRequest) {
     // On a validation error, retry the same model with only the essential JSON request.
     if (upstream.status === 400 && model.startsWith("openai/gpt-oss-")) {
       await upstream.text();
-      const compatibilityPayload = {
+      const compatibilityPayload: Record<string, unknown> = {
         model,
         response_format: { type: "json_object" },
-        messages: requestPayload.messages
+        messages: requestPayload.messages,
+        reasoning_format: "parsed"
       };
       upstream = await sendCompletion(compatibilityPayload);
     }
