@@ -5,7 +5,7 @@ type BuildMode = "Full game" | "Game map" | "Gameplay system" | "UI interface" |
 
 export const generateRobloxProject = task({
   id: "generate-roblox-project",
-  maxDuration: 3600,
+  maxDuration: 7200,
   retry: { maxAttempts: 1 },
   run: async (payload: { prompt: string; mode: BuildMode }) => {
     const request = new Request("http://localhost/api/generate", {
