@@ -49,3 +49,19 @@ The publisher accepts place files up to 10 MB. The API key is used for the reque
 The current AI generator returns Luau script bundles, not complete `.rbxlx`/`.rbxl` place files. Insert and test the generated scripts in Studio, then export the resulting place file before using Publish Now. The publisher does not yet convert the script bundle into a complete place automatically.
 
 Official guide: https://create.roblox.com/docs/cloud/guides/usage-place-publishing
+
+
+## Roblox Studio Connector
+
+A source plugin is included at [roblox-plugin/MadaraAI.plugin.lua](roblox-plugin/MadaraAI.plugin.lua).
+
+1. Open Roblox Studio on a computer.
+2. Create a temporary Script in ServerStorage and paste the plugin source into it.
+3. Select the script, then choose **Plugins → Save as Local Plugin**.
+4. Open the Madara AI toolbar panel and confirm the website URL.
+5. Describe the game and generate. Review the result, then press **Insert generated scripts into Studio** twice to confirm.
+6. Test with Play and inspect Output before publishing.
+
+The plugin uses Roblox Studio's plugin HTTP permission prompt for the Madara AI domain. It does not need your Roblox password, cookie, or publishing API key. Generated scripts are inserted into service paths and same-path scripts may be updated; Studio undo recording is used for the insertion. Roblox Studio is required — this plugin cannot run inside the Roblox iPhone app.
+
+Official references: [Create and install Studio plugins](https://create.roblox.com/docs/studio/plugins) · [HTTP requests from plugins](https://create.roblox.com/docs/cloud-services/http-service)
