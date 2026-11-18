@@ -227,7 +227,7 @@ export async function runGenerationPipeline(request: NextRequest) {
               method: "POST",
               headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
               body: JSON.stringify(requestPayload),
-              ...requestOptions(attempt.name)
+              ...requestOptions("Groq")
             })
           });
         }
@@ -245,7 +245,7 @@ export async function runGenerationPipeline(request: NextRequest) {
                   temperature: Number(requestPayload.temperature ?? 0.2),
                   response_format: { type: "json_object" }
                 }),
-                ...requestOptions(attempt.name)
+                ...requestOptions("Cloudflare Workers AI")
               });
               if (!response.ok) return response;
               const data = await response.json();
@@ -278,7 +278,7 @@ export async function runGenerationPipeline(request: NextRequest) {
                     responseMimeType: "application/json"
                   }
                 }),
-                ...requestOptions(attempt.name)
+                ...requestOptions("Gemini")
               });
               if (!response.ok) return response;
               const data = await response.json();
