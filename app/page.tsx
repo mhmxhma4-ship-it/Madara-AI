@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { strToU8, zipSync } from "fflate";
-import { ArrowUp, Bot, Check, Code2, Copy, Download, ExternalLink, Gamepad2, Github, Layers3, LoaderCircle, Sparkles, WandSparkles, X, BrainCircuit, Globe2, Workflow } from "lucide-react";
+import { ArrowUp, Check, Code2, Copy, Download, ExternalLink, Gamepad2, Github, Layers3, LoaderCircle, Sparkles, WandSparkles, X, BrainCircuit, Globe2, Workflow } from "lucide-react";
 
 type GeneratedFile = { path: string; kind: string; code: string };
 type Agent = { name: string; status: string; detail: string };
