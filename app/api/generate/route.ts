@@ -82,7 +82,7 @@ function validScenePlan(value: unknown): ScenePart[] {
     if (![r, g, b].every(n => typeof n === "number" && Number.isFinite(n) && n >= 0 && n <= 1)) return null;
     return { r: r as number, g: g as number, b: b as number };
   };
-  return value.slice(0, 100).flatMap(item => {
+  const valid = value.slice(0, 100).flatMap(item => {
     if (!item || typeof item !== "object") return [];
     const part = item as Record<string, unknown>;
     const name = typeof part.name === "string" ? part.name.trim() : "";
@@ -99,6 +99,9 @@ function validScenePlan(value: unknown): ScenePart[] {
     const transparency = typeof part.transparency === "number" && Number.isFinite(part.transparency) ? Math.max(0, Math.min(1, part.transparency)) : 0;
     return [{ name, parentPath, className: className as ScenePart["className"], position, size, color: partColor, material, shape, rotation, anchored: typeof part.anchored === "boolean" ? part.anchored : true, canCollide: typeof part.canCollide === "boolean" ? part.canCollide : true, transparency }];
   });
+  return valid.filter((part, index, all) =>
+    all.findIndex(other => other.parentPath.toLowerCase() === part.parentPath.toLowerCase() && other.name.toLowerCase() === part.name.toLowerCase()) === index
+  );
 }
 function uniqueByPath(files: GeneratedFile[]) {
   return files.filter((file, index, all) =>
