@@ -269,10 +269,9 @@ export async function POST(request: NextRequest) {
       )
     ]);
 
-    let files = uniqueByPath([
-      ...validFiles(environment.files, 4),
-      ...validFiles(gameplay.files, 5)
-    ]).slice(0, 8);
+    const environmentFiles = validFiles(environment.files, 4);
+    const gameplayFiles = validFiles(gameplay.files, 5);
+    let files = uniqueByPath([...environmentFiles, ...gameplayFiles]).slice(0, 8);
 
     const environmentPlan = validScenePlan(environment.buildPlan);
     if (files.length === 0 && environmentPlan.length === 0) {
@@ -333,8 +332,8 @@ export async function POST(request: NextRequest) {
       instructions: strings(architect.instructions, 12),
       agents: [
         { name: "Game Architect", status: "complete", detail: "Game loop, progression and world blueprint created." },
-        { name: "Environment Agent", status: environmentPlan.length > 0 || !["Full game", "Game map"].includes(mode) ? "complete" : "warning", detail: environmentPlan.length > 0 ? `${environmentPlan.length} 3D scene objects planned for direct Studio construction.` : "No static 3D scene objects were returned; this project contains scripts only." },
-        { name: "Gameplay Agent", status: "complete", detail: "Gameplay systems and client/server scripts generated." },
+        { name: "Environment Agent", status: environmentPlan.length > 0 || !["Full game", "Game map"].includes(mode) ? "complete" : "warning", detail: environmentPlan.length > 0 ? `${environmentPlan.length} 3D scene objects planned for direct Studio construction.` : ["Full game", "Game map"].includes(mode) ? "No static 3D scene objects were returned." : "Map generation skipped for this creation mode." },
+        { name: "Gameplay Agent", status: mode === "Game map" || gameplayFiles.length > 0 ? "complete" : "warning", detail: mode === "Game map" ? "Gameplay systems skipped by design for map-only mode." : gameplayFiles.length > 0 ? `${gameplayFiles.length} gameplay or interface scripts generated.` : "No gameplay scripts were returned for this mode." },
         { name: "Luau Reviewer", status: reviewerCompleted ? "complete" : "warning", detail: reviewerCompleted ? "Project reviewed and concrete fixes applied where needed." : "Automated review did not finish; manual Studio testing is required." }
       ],
       agentNotes: [
