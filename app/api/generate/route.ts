@@ -212,10 +212,14 @@ export async function POST(request: NextRequest) {
 
       const sendRequest = async (requestPayload: Record<string, unknown>): Promise<Response> => {
         const messages = Array.isArray(requestPayload.messages) ? requestPayload.messages as Array<{ role?: string; content?: string }> : [];
-        const requestOptions = () => ({
-          signal: AbortSignal.timeout(Math.max(1, Math.min(6500, agentDeadline - Date.now()))),
-          cache: "no-store" as RequestCache
-        });
+        const requestOptions = (providerName: string) => {
+          // Fast-fail earlier providers so the final fallback has time for large Roblox JSON.
+          const providerTimeout = providerName === "Gemini" ? 9000 : providerName === "Cloudflare Workers AI" ? 3500 : 2500;
+          return {
+            signal: AbortSignal.timeout(Math.max(1, Math.min(providerTimeout, agentDeadline - Date.now()))),
+            cache: "no-store" as RequestCache
+          };
+        };
         const attempts: Array<{ name: string; run: () => Promise<Response> }> = [];
 
         if (apiKey && !groqDailyLimitReached) {
@@ -225,7 +229,7 @@ export async function POST(request: NextRequest) {
               method: "POST",
               headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
               body: JSON.stringify(requestPayload),
-              ...requestOptions()
+              ...requestOptions(attempt.name)
             })
           });
         }
@@ -243,7 +247,7 @@ export async function POST(request: NextRequest) {
                   temperature: Number(requestPayload.temperature ?? 0.2),
                   response_format: { type: "json_object" }
                 }),
-                ...requestOptions()
+                ...requestOptions(attempt.name)
               });
               if (!response.ok) return response;
               const data = await response.json();
@@ -276,7 +280,7 @@ export async function POST(request: NextRequest) {
                     responseMimeType: "application/json"
                   }
                 }),
-                ...requestOptions()
+                ...requestOptions(attempt.name)
               });
               if (!response.ok) return response;
               const data = await response.json();
@@ -301,8 +305,10 @@ export async function POST(request: NextRequest) {
               try {
                 response = await attempt.run();
               } catch (error) {
+                // Do not retry a timeout immediately: it has already consumed this provider's allocation.
+                if (error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError")) throw error;
                 if (providerTry + 1 >= maxAttempts) throw error;
-                await new Promise(resolve => setTimeout(resolve, 900));
+                await new Promise(resolve => setTimeout(resolve, 500));
                 continue;
               }
               if (response.status !== 503 || providerTry + 1 >= maxAttempts || Date.now() >= agentDeadline - 1300) break;
