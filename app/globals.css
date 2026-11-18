@@ -184,3 +184,15 @@ footer{max-width:1160px;margin:auto;border-top:1px solid var(--line);padding:23p
   color: #8f9bb2;
   font-size: 11px;
 }
+
+
+.no-script-note {
+  margin: 18px 0;
+  padding: 16px;
+  border: 1px dashed rgba(142, 92, 255, .35);
+  border-radius: 12px;
+  color: #c9c4df;
+  background: rgba(142, 92, 255, .06);
+  font-size: 13px;
+  line-height: 1.6;
+}
