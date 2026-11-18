@@ -22,6 +22,16 @@ Rules:
 - Do not claim the project has been tested or published.
 - Keep output concise enough to fit a normal response. Generate up to 8 files.`;
 
+function providerError(status: number) {
+  if (status === 401) return "Groq rejected the API key. Check that OPENAI_API_KEY contains your Groq key.";
+  if (status === 403) return "Groq denied this request. Check your account or model access in Groq Console.";
+  if (status === 404) return "The selected AI model was not found. Check OPENAI_MODEL in Vercel.";
+  if (status === 429) return "Groq rate limit or daily token limit reached. Wait and try again.";
+  if (status === 400) return "Groq rejected the request settings. Check OPENAI_MODEL and try again.";
+  if (status >= 500) return "Groq is temporarily unavailable. Try again shortly.";
+  return `The AI provider returned error ${status}. Check your Groq settings.`;
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -66,7 +76,7 @@ export async function POST(request: NextRequest) {
     if (!upstream.ok) {
       const detail = await upstream.text();
       console.error("AI provider error:", upstream.status, detail.slice(0, 1000));
-      return NextResponse.json({ error: upstream.status === 401 ? "The AI API key was rejected. Check OPENAI_API_KEY." : "The AI provider could not complete the build. Check your provider settings and try again." }, { status: 502 });
+      return NextResponse.json({ error: providerError(upstream.status) }, { status: 502 });
     }
 
     const data = await upstream.json();
@@ -103,6 +113,9 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error("Madara AI generation error:", error);
+    if (error instanceof Error && error.name === "TimeoutError") {
+      return NextResponse.json({ error: "Groq took too long to respond. Try a smaller game request." }, { status: 504 });
+    }
     return NextResponse.json({ error: "Something went wrong while generating your project. Please try again." }, { status: 500 });
   }
 }
