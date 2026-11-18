@@ -240,9 +240,10 @@ export async function POST(request: NextRequest) {
       askAgent(
         "Environment Agent",
         `Build the actual Roblox environment from this approved blueprint: ${blueprintContext}
-        Return JSON with files: array of 1-4 objects {path,kind,code}.
-        Produce complete map/world builder scripts with intentional layout, readable names, spawn points, navigation, lighting and organized folders. Use native Roblox Instances and safe APIs. Use paths that clearly identify Roblox services, such as ServerScriptService/WorldBuilder.server.lua or ReplicatedStorage/Shared/WorldConfig.module.lua. Also return environmentNotes: array of 2-4 strings. Every file must be full source code, never pseudocode.`,
-        3600
+        Return JSON with buildPlan: array of 18-45 objects {name,parentPath,className,position,size,color,material,shape,rotation,anchored,canCollide,transparency}; files: array of 0-3 objects {path,kind,code}; environmentNotes: array of 2-4 strings.
+        The Studio Connector will create these static 3D objects directly in Workspace. parentPath is relative to Workspace, such as "World/SpawnArea" or "World/Platforms". className must be Part or SpawnLocation. position and size use {x,y,z} studs; color uses normalized RGB numbers 0-1; rotation uses degrees; material must be a Roblox Enum.Material name; shape is Block, Ball or Cylinder.
+        Design a coherent playable layout with a floor, spawn point, platforms or paths, boundaries and theme-specific landmarks. Use sensible scale, avoid floating parts and keep the map compact for mobile performance. Do NOT write scripts that recreate the static geometry in buildPlan; files are only for dynamic environment interactions. Every file must be full source code, never pseudocode.`,
+        4800
       ),
       askAgent(
         "Gameplay Agent",
@@ -258,8 +259,9 @@ export async function POST(request: NextRequest) {
       ...validFiles(gameplay.files, 5)
     ]).slice(0, 8);
 
-    if (files.length === 0) {
-      return NextResponse.json({ error: "The agents completed the plan but did not return usable Luau files. Try a more specific idea." }, { status: 502 });
+    const environmentPlan = validScenePlan(environment.buildPlan);
+    if (files.length === 0 && environmentPlan.length === 0) {
+      return NextResponse.json({ error: "The agents completed the plan but did not return usable scripts or 3D scene objects. Try a more specific idea." }, { status: 502 });
     }
 
     // 3. Reviewer: inspect the combined project and repair concrete defects.
@@ -308,12 +310,13 @@ export async function POST(request: NextRequest) {
       projectName: typeof architect.projectName === "string" ? architect.projectName.slice(0, 100) : "My Roblox Game",
       summary: typeof architect.summary === "string" ? architect.summary : "A Roblox project planned and built by Madara AI agents.",
       gameDesign: typeof architect.gameDesign === "string" ? architect.gameDesign : "",
+      environmentPlan,
       worldPlan: strings(architect.worldPlan, 8),
       systemsPlan: strings(architect.systemsPlan, 10),
       instructions: strings(architect.instructions, 12),
       agents: [
         { name: "Game Architect", status: "complete", detail: "Game loop, progression and world blueprint created." },
-        { name: "Environment Agent", status: "complete", detail: "World and map scripts generated from the shared blueprint." },
+        { name: "Environment Agent", status: "complete", detail: `${environmentPlan.length} 3D scene objects planned for direct Studio construction.` },
         { name: "Gameplay Agent", status: "complete", detail: "Gameplay systems and client/server scripts generated." },
         { name: "Luau Reviewer", status: reviewerCompleted ? "complete" : "warning", detail: reviewerCompleted ? "Project reviewed and concrete fixes applied where needed." : "Automated review did not finish; manual Studio testing is required." }
       ],
