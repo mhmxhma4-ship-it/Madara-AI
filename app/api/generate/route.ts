@@ -222,7 +222,7 @@ export async function POST(request: NextRequest) {
         const retryMatch = detail.match(/try again in\s+([0-9.]+)s/i);
         const headerDelay = Number(response.headers.get("retry-after") || 0);
         const bodyDelay = retryMatch ? Number(retryMatch[1]) : 0;
-        const waitMs = Math.min(15000, Math.max(11000, headerDelay * 1000, bodyDelay * 1000) + 500);
+        const waitMs = Math.min(35000, Math.max(1000, headerDelay * 1000, bodyDelay * 1000) + 750);
         await new Promise(resolve => setTimeout(resolve, waitMs));
         const retryPayload = {
           ...payload,
@@ -331,38 +331,40 @@ export async function POST(request: NextRequest) {
     });
 
     // 2. Specialist agents build the environment, gameplay and interface from one blueprint.
-    const [environment, gameplay, interfaceAgent] = await Promise.all([
-      askAgent(
-        "Environment Agent",
-        `Build the actual Roblox environment from this approved blueprint: ${blueprintContext}
+    // Run specialist agents sequentially. Groq applies TPM limits across the whole
+    // organization, so parallel calls create avoidable bursts and 429 responses.
+    const environment = await askAgent(
+      "Environment Agent",
+      `Build the actual Roblox environment from this approved blueprint: ${blueprintContext}
         Return JSON with buildPlan: array of 25-45 objects {name,parentPath,className,position,size,color,material,shape,rotation,anchored,canCollide,transparency}; files: array of 0-3 objects {path,kind,code}; environmentNotes: array of 2-4 strings.
-        The Studio Connector creates these 3D objects directly in Workspace. REALISM IS A HARD REQUIREMENT: never make the map look like Minecraft, voxel art, low-poly or a primitive blockout unless the user explicitly requests that style. Build a believable premium 3D environment with natural terrain and elevation, organic paths/coastlines/cliffs where relevant, varied building silhouettes, layered facades, roofs, windows, trim, realistic-scale props, vegetation, rocks and environmental detail. Never build the whole world from giant cubes or repetitive flat platforms. Since buildPlan supports basic Parts only, use Environment Agent Luau builder scripts to create advanced details and Roblox Terrain via Terrain:FillBlock, FillBall and FillWedge, plus decorative models from varied primitives; do not rely on unknown mesh asset IDs. Add a dedicated environment setup script for Lighting, Atmosphere, clouds, color correction and appropriate post effects. Use realistic Roblox materials such as Ground, Grass, Rock, Slate, Concrete, Asphalt, Wood, Glass, Metal, Water, Sand and Snow with restrained natural colors. For Full game or Game map, create a coherent traversable map with spawn, natural paths, boundaries, landmarks and distinct requested areas. For many stages/worlds, build a reusable modular layout and procedural builder; do not pretend they exist if only a few platforms are supplied. Return 25-45 useful structural objects, not filler. For other modes, return buildPlan: [].
+        The Studio Connector creates these 3D objects directly in Workspace. REALISM IS A HARD REQUIREMENT: never make the map look like Minecraft, voxel art, low-poly or a primitive blockout unless the user explicitly requests that style. Build a believable premium 3D environment with natural terrain and elevation, organic paths/coastlines/cliffs where relevant, varied building silhouettes, layered facades, roofs, windows, trim, realistic-scale props, vegetation, rocks and environmental detail. Never build the whole world from giant cubes or repetitive flat platforms. Since buildPlan supports basic Parts only, use Environment Agent Luau builder scripts to create advanced details and Roblox Terrain via Terrain:FillBlock, FillBall and FillWedge, plus decorative models from varied primitives; do not rely on unknown mesh asset IDs. Add a dedicated environment setup script for Lighting, Atmosphere, clouds, color correction and appropriate post effects. Use realistic Roblox materials such as Ground, Grass, Rock, Slate, Concrete, Asphalt, Wood, Glass, Metal, Water, Sand and Snow with restrained natural colors. For Full game or Game map, create a coherent traversable map with spawn, natural paths, boundaries, landmarks and distinct requested areas. For many stages/worlds, build a reusable modular layout and procedural builder; do not pretend they exist if only a few platforms are supplied. Return 25-45 useful structural objects, not filler. For other modes, return buildPlan: []. 
         parentPath is relative to Workspace, such as "World/SpawnArea". className Part or SpawnLocation. Use studs and believable scale. Avoid floating geometry. Every file must be complete Luau source, never pseudocode.`,
-        3400,
-        "",
-        22000
-      ),
-      askAgent(
-        "Gameplay Agent",
-        `Build the complete playable game systems from this approved blueprint: ${blueprintContext}
+      3400,
+      "",
+      22000
+    );
+
+    const gameplay = await askAgent(
+      "Gameplay Agent",
+      `Build the complete playable game systems from this approved blueprint: ${blueprintContext}
         Return JSON with files: array of 5-8 objects {path,kind,code}; gameplayNotes: array of 3-5 strings.
         THIS IS A FULL GAME BUILD, NOT A DEMO OR PLAN. Implement the core gameplay loop described by the user, not generic placeholder code. Include all essential dependencies and a clear server/client split. For a multiplayer game, implement server-authoritative player/session state and safe handling when players join/leave. For progression games, implement the actual currency/reward/progression loop. For stage games, implement checkpoints, completion and respawn. For combat games, implement validated damage, cooldowns and enemy/boss behavior. Use RemoteEvents created safely by the server and validate every client request. Use DataStoreService with pcall, retries or graceful defaults; the game must still run if saving is unavailable in Studio. Use correct Roblox service paths and full scripts. Do not create UI; the Interface Agent owns UI. Do not duplicate static map parts from buildPlan.`,
-        3800,
-        "",
-        22000
-      ),
-      mode === "Full game" || mode === "UI interface"
-        ? askAgent(
-            "Roblox UI Agent",
-            `Create the complete player-facing interface for this Roblox project using this blueprint: ${blueprintContext}
+      3800,
+      "",
+      22000
+    );
+
+    const interfaceAgent = mode === "Full game" || mode === "UI interface"
+      ? await askAgent(
+          "Roblox UI Agent",
+          `Create the complete player-facing interface for this Roblox project using this blueprint: ${blueprintContext}
             Return JSON with files: array of 1-3 objects {path,kind,code}; gameplayNotes: array of 2-4 strings.
             For Full game, provide a polished premium mobile-friendly StarterPlayer/StarterPlayerScripts/HUD.client.lua LocalScript that creates its ScreenGui at runtime, scales for touch and desktop, displays the actual game stats/progression, and connects only to RemoteEvents/RemoteFunctions that are part of the blueprint. Use modern high-quality game HUD design, clean typography, restrained colors, subtle gradients and strokes, consistent spacing and responsive controls; never use childish blocky/Minecraft-style UI unless requested. If no remotes are specified, coordinate names with the Gameplay Agent using conventional names and document them in gameplayNotes. Include clear feedback, readable buttons and safe touch input. Do not implement server-authoritative game logic in the client. For UI interface mode, focus on the requested UI and its client behavior. Return full runnable Luau, not pseudocode.`,
-            1500,
-            "",
-            18000
-          )
-        : Promise.resolve({ files: [], gameplayNotes: [] } as JsonObject)
-    ]);
+          1500,
+          "",
+          18000
+        )
+      : ({ files: [], gameplayNotes: [] } as JsonObject);
 
     const environmentFiles = validFiles(environment.files, 4);
     const gameplayFiles = validFiles(gameplay.files, 8);
