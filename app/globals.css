@@ -8,3 +8,24 @@
 .steps{max-width:1050px;margin:100px auto 85px;padding:0 25px;text-align:center}.steps h2{font-size:32px;margin:12px 0 35px}.steps-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;text-align:left}.step-card{border:1px solid var(--line);border-radius:14px;background:#ffffff05;padding:22px}.step-icon{width:39px;height:39px;display:grid;place-items:center;border-radius:11px;background:#a78bfa16;color:#c4b5fd;margin-bottom:22px}.step-card>span{font-size:9px;letter-spacing:1.4px;color:#a78bfa;font-weight:700}.step-card h3{font-family:'Space Grotesk',sans-serif;font-size:17px;margin:9px 0}.step-card p{font-size:12px;line-height:1.7;color:#9694a8;margin:0}
 footer{max-width:1160px;margin:auto;border-top:1px solid var(--line);padding:23px 28px;display:flex;align-items:center;justify-content:space-between;color:#777589;font-size:11px}footer .brand{color:#f7f5ff;font-size:17px}footer .brand-mark{width:29px;height:29px;border-radius:9px}footer>a:last-child{display:flex;align-items:center;gap:7px;color:#aaa8bb}.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
 @media(max-width:650px){.topbar{height:65px;padding:0 17px}.desktop-nav,.top-cta{display:none}.hero{padding:78px 20px 48px}.hero h1{font-size:53px;letter-spacing:-3px}.hero-copy{font-size:13px}.hero-tags{gap:12px}.hero-tags span{font-size:10px}.builder-wrap{padding:0 13px}.builder-card{padding:19px 15px}.builder-heading h2{font-size:21px}.beta-pill{font-size:8px}.builder-card textarea{height:170px;font-size:12px}.examples button{width:100%;justify-content:space-between}.result-wrap{padding:0 13px;margin-top:35px}.result-heading{align-items:flex-start;flex-direction:column}.result-heading h2{font-size:21px}.result-card{grid-template-columns:1fr}.file-list{border-right:0;border-bottom:1px solid var(--line);display:flex;flex-wrap:wrap;gap:5px}.file-list-title{width:100%;padding-bottom:5px}.file-tab{width:auto;max-width:48%}.code-panel pre{max-height:420px}.steps{margin:72px auto 60px}.steps h2{font-size:27px}.steps-grid{grid-template-columns:1fr}.step-card{padding:19px}footer{padding:20px 17px;gap:12px;flex-wrap:wrap}footer>span{order:3;width:100%}}
+
+
+.agent-running,.agent-results,.blueprint-card{margin-top:16px;border:1px solid #a78bfa30;border-radius:12px;background:linear-gradient(135deg,#a78bfa0d,#ec48990a);padding:16px}
+.agent-running-title,.agent-results-title{display:flex;align-items:center;gap:8px;color:#d9ccff;font-size:10px;font-weight:700;letter-spacing:1.2px}
+.agent-running-steps{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:13px}
+.agent-running-steps span{display:flex;align-items:center;gap:6px;border:1px solid #ffffff12;border-radius:8px;padding:9px 7px;color:#d7d0ec;font-size:10px}
+.agent-running-steps svg,.agent-results-title svg{color:#c4b5fd}
+.agent-running>p{color:#9290a5;font-size:11px;line-height:1.6;margin:12px 0 0}
+.agent-results-title span{margin-left:auto;color:#a78bfa;font-size:9px}
+.agent-results-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:9px;margin-top:13px}
+.agent-result{min-width:0;padding:12px;border:1px solid #ffffff12;border-radius:9px;background:#09091080}
+.agent-result-icon{width:24px;height:24px;display:grid;place-items:center;border-radius:7px;background:#22c55e18;color:#86efac;margin-bottom:9px}
+.agent-result strong{display:block;color:#eee9ff;font-size:11px}
+.agent-result p{color:#9290a5;font-size:10px;line-height:1.5;margin:6px 0 0}
+.blueprint-card .section-kicker{margin-bottom:10px}
+.blueprint-description{color:#c3bfd2;font-size:12px;line-height:1.7;margin:0 0 14px}
+.blueprint-columns{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.blueprint-columns h3{display:flex;align-items:center;gap:7px;color:#d9ccff;font-size:11px;margin:0 0 8px}
+.blueprint-columns ul{padding-left:17px;margin:0;color:#a6a2b8;font-size:11px;line-height:1.8}
+.instructions ul{margin:0;padding-left:20px;color:#aaa8bb;font-size:12px;line-height:1.9}
+@media(max-width:650px){.agent-running-steps,.agent-results-grid{grid-template-columns:repeat(2,1fr)}.blueprint-columns{grid-template-columns:1fr}.agent-running-steps span{font-size:9px}}
