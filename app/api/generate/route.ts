@@ -47,7 +47,7 @@ function validFiles(value: unknown, maxFiles: number): GeneratedFile[] {
       path.length < 180 &&
       !path.includes("..") &&
       !path.startsWith("/") &&
-      !path.includes("\\\\") &&
+      !path.includes(String.fromCharCode(92)) &&
       !/[<>:"|?*\u0000-\u001f]/.test(path) &&
       typeof code === "string" &&
       code.trim().length > 0 &&
