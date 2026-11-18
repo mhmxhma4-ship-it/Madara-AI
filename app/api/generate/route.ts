@@ -271,7 +271,7 @@ export async function POST(request: NextRequest) {
 
     const environmentFiles = validFiles(environment.files, 4);
     const gameplayFiles = validFiles(gameplay.files, 5);
-    let files = uniqueByPath([...environmentFiles, ...gameplayFiles]).slice(0, 8);
+    const files = uniqueByPath([...environmentFiles, ...gameplayFiles]).slice(0, 8);
 
     const environmentPlan = validScenePlan(environment.buildPlan);
     if (files.length === 0 && environmentPlan.length === 0) {
