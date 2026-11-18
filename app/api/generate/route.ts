@@ -175,6 +175,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "AI is not connected. Add at least one provider key in Vercel and redeploy." }, { status: 503 });
     }
 
+    // Once Groq reports its daily token quota is exhausted, bypass it for every
+    // remaining agent in this generation instead of repeatedly hitting a dead quota.
+    let groqDailyLimitReached = false;
+
     async function askAgent(
       agentName: string,
       instructions: string,
@@ -204,7 +208,7 @@ export async function POST(request: NextRequest) {
         const controllerOptions = { signal: AbortSignal.timeout(timeoutMs), cache: "no-store" as RequestCache };
         const attempts: Array<{ name: string; run: () => Promise<Response> }> = [];
 
-        if (apiKey) {
+        if (apiKey && !groqDailyLimitReached) {
           attempts.push({
             name: "Groq",
             run: () => fetch(`${baseUrl}/chat/completions`, {
@@ -281,6 +285,9 @@ export async function POST(request: NextRequest) {
             const response = await attempt.run();
             if (response.ok) return response;
             const detail = await response.text();
+            if (attempt.name === "Groq" && response.status === 429 && /tokens per day|token[s]? per day|\bTPD\b/i.test(detail)) {
+              groqDailyLimitReached = true;
+            }
             failures.push(`${attempt.name} (${response.status}): ${detail.slice(0, 180)}`);
             lastResponse = new Response(JSON.stringify({ error: { message: failures[failures.length - 1] } }), {
               status: response.status,
@@ -312,11 +319,12 @@ export async function POST(request: NextRequest) {
       // Wait for the provider's stated cooldown and retry once with a smaller output budget.
       if (response.status === 429) {
         await readResponseBody();
+        const isDailyQuota = /tokens per day|token[s]? per day|\bTPD\b/i.test(detail);
         const retryMatch = detail.match(/try again in\s+([0-9.]+)s/i);
         const headerDelay = Number(response.headers.get("retry-after") || 0);
         const bodyDelay = retryMatch ? Number(retryMatch[1]) : 0;
         const waitMs = Math.min(35000, Math.max(1000, headerDelay * 1000, bodyDelay * 1000) + 750);
-        await new Promise(resolve => setTimeout(resolve, waitMs));
+        if (!isDailyQuota) await new Promise(resolve => setTimeout(resolve, waitMs));
         const retryPayload = {
           ...payload,
           max_completion_tokens: Math.max(900, Math.floor(maxTokens * 0.65)),
