@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { runs, tasks } from "@trigger.dev/sdk";
+import type { generateRobloxProject } from "@/trigger/generate-roblox-project";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -125,6 +127,41 @@ function findUnsafePatterns(files: GeneratedFile[]) {
 }
 
 export async function POST(request: NextRequest) {
+  if (!process.env.TRIGGER_SECRET_KEY) {
+    return NextResponse.json({ error: "Background generation is not configured. Add TRIGGER_SECRET_KEY and deploy the Trigger.dev task." }, { status: 503 });
+  }
+  try {
+    const body = await request.json();
+    const prompt = typeof body.prompt === "string" ? body.prompt.trim() : "";
+    const mode = body.mode as BuildMode;
+    if (!prompt || prompt.length > MAX_PROMPT_LENGTH) return NextResponse.json({ error: "Write a game idea between 1 and 5000 characters." }, { status: 400 });
+    if (!allowedModes.includes(mode)) return NextResponse.json({ error: "Choose a valid creation mode." }, { status: 400 });
+    const handle = await tasks.trigger<typeof generateRobloxProject>("generate-roblox-project", { prompt, mode });
+    return NextResponse.json({ runId: handle.id, status: "QUEUED" }, { status: 202 });
+  } catch (error) {
+    console.error("Madara AI could not queue generation:", error);
+    return NextResponse.json({ error: "Could not start background generation. Check Trigger.dev configuration." }, { status: 503 });
+  }
+}
+
+export async function GET(request: NextRequest) {
+  const runId = request.nextUrl.searchParams.get("runId") || "";
+  if (!/^run_[A-Za-z0-9_-]+$/.test(runId)) return NextResponse.json({ error: "Invalid generation ID." }, { status: 400 });
+  try {
+    const run = await runs.retrieve(runId);
+    if (run.status === "COMPLETED") return NextResponse.json({ status: run.status, project: run.output });
+    if (["FAILED", "CRASHED", "SYSTEM_FAILURE", "INTERRUPTED", "CANCELED", "EXPIRED"].includes(run.status)) {
+      const error = typeof run.error === "string" ? run.error : "Background generation failed. Open Trigger.dev Runs to inspect the error.";
+      return NextResponse.json({ status: run.status, error });
+    }
+    return NextResponse.json({ status: run.status });
+  } catch (error) {
+    console.error("Madara AI run lookup failed:", error);
+    return NextResponse.json({ error: "Could not read generation status. Check TRIGGER_SECRET_KEY." }, { status: 503 });
+  }
+}
+
+async function legacyPostDisabled(request: NextRequest) {
   try {
     const contentLength = Number(request.headers.get("content-length") || 0);
     if (contentLength > 24_000) {
@@ -179,7 +216,7 @@ export async function POST(request: NextRequest) {
 
     // Keep the whole multi-agent pipeline inside Vercel's function window.
     // Individual agents and provider fallbacks share one hard deadline.
-    const generationDeadline = Date.now() + 56_000;
+    const generationDeadline = Date.now() + 55 * 60_000;
 
     // Once Groq reports its daily token quota is exhausted, bypass it for every
     // remaining agent in this generation instead of repeatedly hitting a dead quota.
@@ -190,7 +227,7 @@ export async function POST(request: NextRequest) {
       instructions: string,
       maxTokens = 4096,
       extraContext = "",
-      timeoutMs = 16000
+      timeoutMs = 180000
     ): Promise<JsonObject> {
       const agentDeadline = Math.min(generationDeadline, Date.now() + timeoutMs);
       const payload: Record<string, unknown> = {
@@ -214,7 +251,7 @@ export async function POST(request: NextRequest) {
         const messages = Array.isArray(requestPayload.messages) ? requestPayload.messages as Array<{ role?: string; content?: string }> : [];
         const requestOptions = (providerName: string) => {
           // Fast-fail earlier providers so the final fallback has time for large Roblox JSON.
-          const providerTimeout = providerName === "Gemini" ? 9000 : providerName === "Cloudflare Workers AI" ? 3500 : 2500;
+          const providerTimeout = providerName === "Gemini" ? 120000 : providerName === "Cloudflare Workers AI" ? 90000 : 90000;
           return {
             signal: AbortSignal.timeout(Math.max(1, Math.min(providerTimeout, agentDeadline - Date.now()))),
             cache: "no-store" as RequestCache
@@ -469,7 +506,7 @@ export async function POST(request: NextRequest) {
         parentPath is relative to Workspace, such as "World/SpawnArea". className Part or SpawnLocation. Use studs and believable scale. Avoid floating geometry. Every file must be complete Luau source, never pseudocode.`,
       3400,
       "",
-      14000
+      180000
     );
 
     const gameplay = await askAgent(
@@ -479,7 +516,7 @@ export async function POST(request: NextRequest) {
         THIS IS A FULL GAME BUILD, NOT A DEMO OR PLAN. Implement the core gameplay loop described by the user, not generic placeholder code. Include all essential dependencies and a clear server/client split. For a multiplayer game, implement server-authoritative player/session state and safe handling when players join/leave. For progression games, implement the actual currency/reward/progression loop. For stage games, implement checkpoints, completion and respawn. For combat games, implement validated damage, cooldowns and enemy/boss behavior. Use RemoteEvents created safely by the server and validate every client request. Use DataStoreService with pcall, retries or graceful defaults; the game must still run if saving is unavailable in Studio. Use correct Roblox service paths and full scripts. Do not create UI; the Interface Agent owns UI. Do not duplicate static map parts from buildPlan.`,
       3800,
       "",
-      17000
+      180000
     );
 
     let interfaceAgent: JsonObject = { files: [], gameplayNotes: [] };
@@ -493,7 +530,7 @@ export async function POST(request: NextRequest) {
             For Full game, provide a polished premium mobile-friendly StarterPlayer/StarterPlayerScripts/HUD.client.lua LocalScript that creates its ScreenGui at runtime, scales for touch and desktop, displays the actual game stats/progression, and connects only to RemoteEvents/RemoteFunctions that are part of the blueprint. Use modern high-quality game HUD design, clean typography, restrained colors, subtle gradients and strokes, consistent spacing and responsive controls; never use childish blocky/Minecraft-style UI unless requested. If no remotes are specified, coordinate names with the Gameplay Agent using conventional names and document them in gameplayNotes. Include clear feedback, readable buttons and safe touch input. Do not implement server-authoritative game logic in the client. For UI interface mode, focus on the requested UI and its client behavior. Return full runnable Luau, not pseudocode.`,
           1500,
           "",
-          9000
+          120000
         );
       } catch (error) {
         // UI is an optional specialist: a provider TPM limit must not discard
@@ -544,7 +581,7 @@ export async function POST(request: NextRequest) {
         IMPORTANT: Return a corrected file only when you made a real improvement. Preserve the exact path and kind for every corrected file. Do not rewrite working code just for style. Do not add unrelated systems. If a file is already sound, omit it from files. Never say code was executed or tested.`,
         3000,
         JSON.stringify({ blueprint: architect, files, environmentPlan }),
-        7000
+        90000
       );
       const corrected = validFiles(review.files, 8);
       for (const fix of corrected) {
