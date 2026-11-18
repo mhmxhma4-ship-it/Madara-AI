@@ -412,6 +412,11 @@ insertButton.Activated:Connect(function()
 
 	busy = true
 	local recordingId = ChangeHistoryService:TryBeginRecording("MadaraAIInsert", "Insert generated Madara AI scripts")
+	if not recordingId then
+		busy = false
+		setStatus("Studio could not start an undo recording. No scripts were inserted. Try again.", COLORS.red)
+		return
+	end
 	local inserted = 0
 	local failures = {}
 	for _, file in ipairs(generatedProject.files) do
