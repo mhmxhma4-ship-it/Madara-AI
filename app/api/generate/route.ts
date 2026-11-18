@@ -83,7 +83,26 @@ export async function POST(request: NextRequest) {
     if (!upstream.ok) {
       const detail = await upstream.text();
       console.error("AI provider error:", upstream.status, detail.slice(0, 1000));
-      return NextResponse.json({ error: providerError(upstream.status) }, { status: 502 });
+
+      let providerMessage = "";
+      try {
+        const parsed = JSON.parse(detail);
+        providerMessage = typeof parsed?.error?.message === "string"
+          ? parsed.error.message
+          : typeof parsed?.message === "string" ? parsed.message : "";
+      } catch {
+        providerMessage = "";
+      }
+
+      // Show the provider's actionable validation message, but never return request headers or secrets.
+      const safeMessage = providerMessage
+        .replace(/Bearer\\s+\\S+/gi, "[hidden]")
+        .replace(/gsk_[A-Za-z0-9_-]+/g, "[hidden]")
+        .slice(0, 350);
+
+      return NextResponse.json({
+        error: safeMessage ? `Groq error (${upstream.status}): ${safeMessage}` : providerError(upstream.status)
+      }, { status: 502 });
     }
 
     const data = await upstream.json();
