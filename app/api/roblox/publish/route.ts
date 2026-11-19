@@ -44,7 +44,7 @@ export async function POST(request: NextRequest) {
     const universeId = (rawUniverseId as string).trim();
     const placeId = (rawPlaceId as string).trim();
     const robloxUrl =
-      \`https://apis.roblox.com/universes/v1/\${universeId}/places/\${placeId}/versions?versionType=Published\`;
+      `https://apis.roblox.com/universes/v1/${universeId}/places/${placeId}/versions?versionType=Published`;
 
     const upstream = await fetch(robloxUrl, {
       method: "POST",
@@ -74,7 +74,7 @@ export async function POST(request: NextRequest) {
         409: "This Place ID does not belong to the selected Universe ID.",
         413: "The place file is too large for Roblox Open Cloud.",
       };
-      return json(messages[upstream.status] || \`Roblox publishing failed (\${upstream.status}).\`, upstream.status >= 500 ? 502 : upstream.status);
+      return json(messages[upstream.status] || `Roblox publishing failed (${upstream.status}).`, upstream.status >= 500 ? 502 : upstream.status);
     }
 
     return NextResponse.json({
