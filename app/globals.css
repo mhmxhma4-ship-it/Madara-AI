@@ -228,3 +228,7 @@ footer{max-width:1160px;margin:auto;border-top:1px solid var(--line);padding:23p
 
 .current-work-panel>p{margin:11px 0 0;color:#858398;font-size:9px;line-height:1.55}
 @media(max-width:520px){.current-work-panel{padding:12px}.current-work-heading{flex-wrap:wrap}.current-work-heading>span{font-size:7px}.current-work-panel li{font-size:9px}}
+
+.live-activity-detail{display:grid;gap:5px;margin:12px 0;padding:10px 11px;border:1px solid #a78bfa55;border-radius:9px;background:#8b5cf610}
+.live-activity-detail span{color:#b9a8ed;font-size:8px;font-weight:800;letter-spacing:.12em}
+.live-activity-detail strong{color:#eee9fb;font-size:11px;line-height:1.55;font-weight:600}
