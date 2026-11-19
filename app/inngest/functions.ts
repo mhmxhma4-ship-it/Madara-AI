@@ -25,6 +25,18 @@ export const generateRobloxProject = inngest.createFunction(
       });
     };
 
+    let activitySequence = 0;
+    const emitActivity = async (agent: string, activity: string) => {
+      activitySequence += 1;
+      await step.run(`activity-${activitySequence}`, async () => {
+        await inngest.send({
+          name: "madara/generation.progress",
+          data: { runId: event.id, step: agent.toLowerCase().replace(/[^a-z0-9]+/g, "-"), status: "running", activity },
+        });
+        return { sent: true };
+      });
+    };
+
     const response = await runGenerationPipeline(request, async (name, run) => {
       await emitProgress(name, "running");
       try {
@@ -35,7 +47,7 @@ export const generateRobloxProject = inngest.createFunction(
         await emitProgress(name, "failed");
         throw error;
       }
-    });
+    }, emitActivity);
     return await response.json();
   }
 );
