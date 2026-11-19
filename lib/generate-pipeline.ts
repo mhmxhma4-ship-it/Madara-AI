@@ -70,7 +70,7 @@ function validFiles(value: unknown, maxFiles: number): GeneratedFile[] {
       validStarterPlayerPath &&
       !path.startsWith("/") &&
       !path.includes(String.fromCharCode(92)) &&
-      !/[<>:"|?*\\u0000-\\u001f]/.test(path) &&
+      !/[<>:"|?*\u0000-\u001f]/.test(path) &&
       code.trim().length > 0 &&
       code.length < MAX_FILE_LENGTH;
     return valid ? [{ path, kind, code }] : [];
