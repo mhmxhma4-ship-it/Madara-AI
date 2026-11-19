@@ -195,7 +195,7 @@ export default function Home() {
 
   async function generate() {
     if (!prompt.trim()) { setError("Write your Roblox game idea first."); return; }
-    setElapsedSeconds(0); setLoading(true); setError(""); setProject(null);
+    setElapsedSeconds(0); setLoading(true); setError(""); setProject(null); setGeneratedPlaceFile(null);
     try {
       const startResponse = await fetch("/api/generate", {
         method: "POST", headers: { "Content-Type": "application/json" },
