@@ -117,11 +117,12 @@ function validScenePlan(value: unknown): ScenePart[] {
     if (!item || typeof item !== "object") return [];
     const part = item as Record<string, unknown>;
     const name = typeof part.name === "string" && part.name.trim() ? part.name.trim() : "SceneObject_" + (index + 1);
-    const parentPath = typeof part.parentPath === "string" && part.parentPath.trim() ? part.parentPath.trim() : "World";
+    const rawParentPath = typeof part.parentPath === "string" && part.parentPath.trim() ? part.parentPath.trim() : "World";
+    const parentPath = rawParentPath.replace(/^Workspace\//i, "");
     const className = part.className === "SpawnLocation" ? "SpawnLocation" : part.className === undefined || part.className === null || part.className === "Part" ? "Part" : null;
-    const position = vector(part.position, -10000, 10000);
-    const size = vector(part.size, 0.2, 512);
-    const partColor = color(part.color);
+    const position = vector(part.position ?? part.Position ?? part.pos ?? { x: part.x, y: part.y, z: part.z }, -10000, 10000);
+    const size = vector(part.size ?? part.Size ?? (className === "SpawnLocation" ? { x: 12, y: 1, z: 12 } : { x: 6, y: 1, z: 6 }), 0.2, 512);
+    const partColor = color(part.color ?? part.Color) || { r: 0.38, g: 0.42, b: 0.36 };
     const rotation = vector(part.rotation ?? { x: 0, y: 0, z: 0 }, -360, 360);
     const segments = parentPath.split("/");
     if (!/^[A-Za-z0-9 _-]{1,50}$/.test(name) || !/^[A-Za-z0-9 _/-]{1,120}$/.test(parentPath) || segments.some(segment => !segment || segment === "." || segment === "..") || !className || !position || !size || !partColor || !rotation) return [];
