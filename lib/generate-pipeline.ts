@@ -79,40 +79,72 @@ function validFiles(value: unknown, maxFiles: number): GeneratedFile[] {
 function validScenePlan(value: unknown): ScenePart[] {
   if (!Array.isArray(value)) return [];
   const materials = new Set(["SmoothPlastic", "Plastic", "Neon", "Metal", "Wood", "WoodPlanks", "Concrete", "Grass", "Sand", "Brick", "Slate", "Glass", "Ice", "Marble", "Granite", "DiamondPlate", "Fabric", "Foil", "CorrodedMetal", "ForceField", "Asphalt", "Basalt", "Ground", "LeafyGrass", "Limestone", "Mud", "Pavement", "Rock", "Salt", "Sandstone", "Snow", "Water"]);
+  const numberValue = (input: unknown): number | null => {
+    if (typeof input === "number" && Number.isFinite(input)) return input;
+    if (typeof input === "string" && input.trim() !== "") {
+      const parsed = Number(input);
+      if (Number.isFinite(parsed)) return parsed;
+    }
+    return null;
+  };
   const vector = (input: unknown, min: number, max: number) => {
     if (!input || typeof input !== "object") return null;
-    const value = input as Record<string, unknown>;
-    const { x, y, z } = value;
-    if (![x, y, z].every(n => typeof n === "number" && Number.isFinite(n) && n >= min && n <= max)) return null;
-    return { x: x as number, y: y as number, z: z as number };
+    const source = input as Record<string, unknown>;
+    const values = Array.isArray(input)
+      ? [input[0], input[1], input[2]]
+      : [source.x ?? source.X, source.y ?? source.Y, source.z ?? source.Z];
+    const [x, y, z] = values.map(numberValue);
+    if (x === null || y === null || z === null || [x, y, z].some(n => n < min || n > max)) return null;
+    return { x, y, z };
   };
   const color = (input: unknown) => {
-    if (!input || typeof input !== "object") return null;
-    const { r, g, b } = input as Record<string, unknown>;
-    if (![r, g, b].every(n => typeof n === "number" && Number.isFinite(n) && n >= 0 && n <= 1)) return null;
-    return { r: r as number, g: g as number, b: b as number };
+    let channels: Array<number | null> | null = null;
+    if (typeof input === "string") {
+      const hex = input.trim().match(/^#?([0-9a-f]{6})$/i)?.[1];
+      if (hex) channels = [0, 2, 4].map(offset => parseInt(hex.slice(offset, offset + 2), 16) / 255);
+    } else if (Array.isArray(input) && input.length >= 3) {
+      channels = input.slice(0, 3).map(numberValue);
+    } else if (input && typeof input === "object") {
+      const source = input as Record<string, unknown>;
+      channels = [numberValue(source.r ?? source.R), numberValue(source.g ?? source.G), numberValue(source.b ?? source.B)];
+    }
+    if (!channels || channels.length !== 3 || channels.some(channel => channel === null || !Number.isFinite(channel) || channel < 0)) return null;
+    const normalized = channels.some(channel => (channel ?? 0) > 1) ? channels.map(channel => (channel ?? 0) / 255) : channels;
+    if (normalized.some(channel => (channel ?? 0) > 1)) return null;
+    return { r: normalized[0] as number, g: normalized[1] as number, b: normalized[2] as number };
   };
-  const valid = value.slice(0, 100).flatMap(item => {
+  const valid = value.slice(0, 100).flatMap((item, index): ScenePart[] => {
     if (!item || typeof item !== "object") return [];
     const part = item as Record<string, unknown>;
-    const name = typeof part.name === "string" ? part.name.trim() : "";
-    const parentPath = typeof part.parentPath === "string" ? part.parentPath.trim() : "World";
-    const className = part.className;
+    const name = typeof part.name === "string" && part.name.trim() ? part.name.trim() : "SceneObject_" + (index + 1);
+    const parentPath = typeof part.parentPath === "string" && part.parentPath.trim() ? part.parentPath.trim() : "World";
+    const className = part.className === "SpawnLocation" ? "SpawnLocation" : part.className === undefined || part.className === null || part.className === "Part" ? "Part" : null;
     const position = vector(part.position, -10000, 10000);
     const size = vector(part.size, 0.2, 512);
     const partColor = color(part.color);
     const rotation = vector(part.rotation ?? { x: 0, y: 0, z: 0 }, -360, 360);
     const segments = parentPath.split("/");
-    if (!/^[A-Za-z0-9 _-]{1,50}$/.test(name) || !/^[A-Za-z0-9 _/-]{1,120}$/.test(parentPath) || segments.some(segment => !segment || segment === "." || segment === "..") || !["Part", "SpawnLocation"].includes(String(className)) || !position || !size || !partColor || !rotation) return [];
-    const shape = ["Block", "Ball", "Cylinder"].includes(String(part.shape)) ? part.shape as ScenePart["shape"] : "Block";
-    const material = typeof part.material === "string" && materials.has(part.material) ? part.material : "SmoothPlastic";
-    const transparency = typeof part.transparency === "number" && Number.isFinite(part.transparency) ? Math.max(0, Math.min(1, part.transparency)) : 0;
-    return [{ name, parentPath, className: className as ScenePart["className"], position, size, color: partColor, material, shape, rotation, anchored: typeof part.anchored === "boolean" ? part.anchored : true, canCollide: typeof part.canCollide === "boolean" ? part.canCollide : true, transparency }];
+    if (!/^[A-Za-z0-9 _-]{1,50}$/.test(name) || !/^[A-Za-z0-9 _/-]{1,120}$/.test(parentPath) || segments.some(segment => !segment || segment === "." || segment === "..") || !className || !position || !size || !partColor || !rotation) return [];
+    const shapeText = typeof part.shape === "string" ? part.shape.toLowerCase() : "block";
+    const shape: ScenePart["shape"] = ["ball", "sphere"].includes(shapeText) ? "Ball" : shapeText === "cylinder" ? "Cylinder" : "Block";
+    const materialInput = typeof part.material === "string" ? part.material : "";
+    const materialAlias: Record<string, string> = { "leafy grass": "LeafyGrass", "wood planks": "WoodPlanks", "smooth plastic": "SmoothPlastic" };
+    const material = materials.has(materialInput) ? materialInput : materialAlias[materialInput.toLowerCase()] || "SmoothPlastic";
+    const transparencyInput = numberValue(part.transparency);
+    const transparency = transparencyInput === null ? 0 : Math.max(0, Math.min(1, transparencyInput));
+    return [{
+      name, parentPath, className, position, size, color: partColor, material,
+      shape, rotation,
+      anchored: typeof part.anchored === "boolean" ? part.anchored : true,
+      canCollide: typeof part.canCollide === "boolean" ? part.canCollide : true,
+      transparency
+    }];
   });
   return valid.filter((part, index, all) =>
     all.findIndex(other => other.parentPath.toLowerCase() === part.parentPath.toLowerCase() && other.name.toLowerCase() === part.name.toLowerCase()) === index
   );
 }
+
 function addFallbackMapScaffold(existing: ScenePart[]): ScenePart[] {
   // Last-resort playable foundation: preserve every AI-authored object and add
   // only missing structural pieces so a provider outage cannot discard the game.
@@ -708,7 +740,7 @@ export async function runGenerationPipeline(request: Request, stepRunner?: Pipel
       instructions: strings(architect.instructions, 12),
       agents: [
         { name: "Game Architect", status: "complete", detail: "Game loop, progression and world blueprint created." },
-        { name: "Environment Agent", status: environmentPlan.length > 0 || !["Full game", "Game map"].includes(mode) ? "complete" : "warning", detail: environmentPlan.length > 0 ? `${environmentPlan.length} 3D scene objects planned for direct Studio construction.` : ["Full game", "Game map"].includes(mode) ? "No static 3D scene objects were returned." : "Map generation skipped for this creation mode." },
+        { name: "Environment Agent", status: fallbackMapAdded ? "warning" : environmentPlan.length > 0 || !["Full game", "Game map"].includes(mode) ? "complete" : "warning", detail: fallbackMapAdded ? `${environmentPlan.length} 3D objects include an automatic fallback foundation; expand and review the map in Studio.` : environmentPlan.length > 0 ? `${environmentPlan.length} 3D scene objects planned for direct Studio construction.` : ["Full game", "Game map"].includes(mode) ? "No static 3D scene objects were returned." : "Map generation skipped for this creation mode." },
         { name: "Gameplay Agent", status: mode === "Game map" || gameplayFiles.length > 0 ? "complete" : "warning", detail: mode === "Game map" ? "Gameplay systems skipped by design for map-only mode." : gameplayFiles.length > 0 ? `${gameplayFiles.length} gameplay scripts generated.` : "No gameplay scripts were returned for this mode." },
         { name: "UI Agent", status: mode !== "Full game" && mode !== "UI interface" || interfaceFiles.length > 0 ? "complete" : "warning", detail: mode === "Full game" || mode === "UI interface" ? interfaceFiles.length > 0 ? `${interfaceFiles.length} interface scripts generated.` : interfaceAgentError ? `UI generation skipped so the rest of the game could be saved: ${interfaceAgentError.slice(0, 180)}` : "The UI agent returned no interface scripts." : "Interface generation skipped for this mode." },
         { name: "Luau Reviewer", status: reviewerCompleted && reviewWarnings.length === 0 ? "complete" : "warning", detail: !reviewerCompleted ? "Automated review did not finish; manual Studio testing is required." : reviewWarnings.length > 0 ? "Review completed with remaining warnings. Read the notes before inserting." : "Project reviewed and concrete fixes applied where needed." }
