@@ -171,7 +171,7 @@ export default function Home() {
           }
           if (data.error || ["FAILED", "CRASHED", "SYSTEM_FAILURE", "INTERRUPTED", "CANCELED", "EXPIRED"].includes(data.status)) {
             window.localStorage.removeItem("madara-active-run");
-            throw new Error(data.error || "The saved generation failed. Open Trigger.dev Runs for details.");
+            throw new Error(data.error || "The saved generation failed. Open Inngest Runs for details.");
           }
           await new Promise(resolve => window.setTimeout(resolve, 2500));
         }
@@ -196,7 +196,7 @@ export default function Home() {
       const started = await startResponse.json();
       if (!startResponse.ok) throw new Error(started.error || "Could not start generation.");
       const runId = started.runId as string;
-      if (!runId) throw new Error("Trigger.dev did not return a generation ID.");
+      if (!runId) throw new Error("Inngest did not return a generation ID.");
       window.localStorage.setItem("madara-active-run", runId);
 
       const deadline = Date.now() + 115 * 60 * 1000;
@@ -212,10 +212,10 @@ export default function Home() {
         }
         if (statusData.error || ["FAILED", "CRASHED", "SYSTEM_FAILURE", "INTERRUPTED", "CANCELED", "EXPIRED"].includes(statusData.status)) {
           window.localStorage.removeItem("madara-active-run");
-          throw new Error(statusData.error || "Generation failed. Open Trigger.dev Runs for details.");
+          throw new Error(statusData.error || "Generation failed. Open Inngest Runs for details.");
         }
       }
-      throw new Error("Generation is still running or exceeded the 115-minute wait. Check Trigger.dev Runs.");
+      throw new Error("Generation is still running or exceeded the 115-minute wait. Check Inngest Runs.");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not generate the project.");
     } finally { setLoading(false); }
@@ -318,8 +318,8 @@ export default function Home() {
   const currentWork = {
     title: "Gjenerimi po vazhdon ne sfond",
     tasks: [
-      "Agjentet AI po punojne ne Trigger.dev, jashte kufirit te kerkeses Vercel",
-      "Run-i vazhdon ne Trigger.dev edhe nese faqja rifreskohet ose mbyllet",
+      "Agjentet AI po punojne ne Inngest, jashte kufirit te kerkeses Vercel",
+      "Run-i vazhdon ne Inngest edhe nese faqja rifreskohet ose mbyllet",
       "Rezultati do te shfaqet ketu kur gjenerimi te perfundoje"
     ]
   };
