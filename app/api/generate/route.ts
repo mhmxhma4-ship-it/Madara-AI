@@ -1,44 +1,66 @@
 import { NextRequest, NextResponse } from "next/server";
-import { runs, tasks } from "@trigger.dev/sdk";
-import type { generateRobloxProject } from "@/trigger/generate-roblox-project";
-import { runGenerationPipeline, type BuildMode } from "@/lib/generate-pipeline";
+import { inngest } from "@/app/inngest/client";
+import type { BuildMode } from "@/lib/generate-pipeline";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+export const maxDuration = 30;
 
 const allowedModes: BuildMode[] = ["Full game", "Game map", "Gameplay system", "UI interface", "Lua script"];
 
 export async function POST(request: NextRequest) {
-  if (!process.env.TRIGGER_SECRET_KEY) {
-    return NextResponse.json({ error: "Background generation is not configured. Add TRIGGER_SECRET_KEY and deploy the Trigger.dev task." }, { status: 503 });
+  if (!process.env.INNGEST_EVENT_KEY) {
+    return NextResponse.json({ error: "Background generation is not configured. Connect the Inngest Vercel integration and redeploy." }, { status: 503 });
   }
+
   try {
     const body = await request.json();
     const prompt = typeof body.prompt === "string" ? body.prompt.trim() : "";
     const mode = body.mode as BuildMode;
     if (!prompt || prompt.length > 5000) return NextResponse.json({ error: "Write a game idea between 1 and 5000 characters." }, { status: 400 });
     if (!allowedModes.includes(mode)) return NextResponse.json({ error: "Choose a valid creation mode." }, { status: 400 });
-    const handle = await tasks.trigger<typeof generateRobloxProject>("generate-roblox-project", { prompt, mode });
-    return NextResponse.json({ runId: handle.id, status: "QUEUED" }, { status: 202 });
+
+    const { ids } = await inngest.send({
+      name: "madara/generate.requested",
+      data: { prompt, mode },
+    });
+    const runId = ids?.[0];
+    if (!runId) throw new Error("Inngest did not return an event ID.");
+    return NextResponse.json({ runId, status: "QUEUED" }, { status: 202 });
   } catch (error) {
     console.error("Madara AI could not queue generation:", error);
-    return NextResponse.json({ error: "Could not start background generation. Check Trigger.dev configuration." }, { status: 503 });
+    return NextResponse.json({ error: "Could not start background generation. Check the Inngest integration and event key." }, { status: 503 });
   }
 }
 
 export async function GET(request: NextRequest) {
   const runId = request.nextUrl.searchParams.get("runId") || "";
-  if (!/^run_[A-Za-z0-9_-]+$/.test(runId)) return NextResponse.json({ error: "Invalid generation ID." }, { status: 400 });
+  if (!/^[A-Za-z0-9_-]{10,80}$/.test(runId)) return NextResponse.json({ error: "Invalid generation ID." }, { status: 400 });
+
+  const signingKey = process.env.INNGEST_SIGNING_KEY;
+  if (!signingKey) return NextResponse.json({ error: "Inngest signing key is missing. Reconnect the Vercel integration and redeploy." }, { status: 503 });
+
   try {
-    const run = await runs.retrieve(runId);
-    if (run.status === "COMPLETED") return NextResponse.json({ status: run.status, project: run.output });
-    if (["FAILED", "CRASHED", "SYSTEM_FAILURE", "INTERRUPTED", "CANCELED", "EXPIRED"].includes(run.status)) {
-      const error = typeof run.error === "string" ? run.error : "Background generation failed. Open Trigger.dev Runs to inspect the error.";
-      return NextResponse.json({ status: run.status, error });
+    const response = await fetch(`https://api.inngest.com/v1/events/${encodeURIComponent(runId)}/runs`, {
+      headers: { Authorization: `Bearer ${signingKey}` },
+      cache: "no-store",
+    });
+    if (!response.ok) throw new Error(`Inngest status API returned ${response.status}.`);
+    const payload = await response.json() as { data?: Array<Record<string, unknown>> };
+    const run = payload.data?.[0];
+    if (!run) return NextResponse.json({ status: "QUEUED" });
+
+    const status = String(run.status || "").toLowerCase();
+    const output = run.output && typeof run.output === "object" ? run.output as Record<string, unknown> : {};
+    if (status === "completed") {
+      if (typeof output.error === "string") return NextResponse.json({ status: "FAILED", error: output.error });
+      return NextResponse.json({ status: "COMPLETED", project: output });
     }
-    return NextResponse.json({ status: run.status });
+    if (status === "failed" || status === "cancelled" || status === "canceled") {
+      return NextResponse.json({ status: "FAILED", error: typeof output.error === "string" ? output.error : "Background generation failed. Open Inngest Runs to inspect the error." });
+    }
+    return NextResponse.json({ status: status === "queued" ? "QUEUED" : "RUNNING" });
   } catch (error) {
     console.error("Madara AI run lookup failed:", error);
-    return NextResponse.json({ error: "Could not read generation status. Check TRIGGER_SECRET_KEY." }, { status: 503 });
+    return NextResponse.json({ error: "Could not read generation status. Check the Inngest signing key and Runs dashboard." }, { status: 503 });
   }
 }
