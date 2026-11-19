@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { strToU8, zipSync } from "fflate";
+import { buildRobloxPlaceXml } from "@/lib/roblox-place";
 import { ArrowUp, Check, Code2, Copy, Download, ExternalLink, Gamepad2, Github, Layers3, LoaderCircle, Sparkles, WandSparkles, X, BrainCircuit, Globe2, Workflow, Clock3, Activity } from "lucide-react";
 
 type GeneratedFile = { path: string; kind: string; code: string };
@@ -10,6 +11,9 @@ type ScenePart = {
   position: { x: number; y: number; z: number };
   size: { x: number; y: number; z: number };
   color: { r: number; g: number; b: number };
+  material?: string; shape?: "Block" | "Ball" | "Cylinder";
+  rotation?: { x: number; y: number; z: number };
+  anchored?: boolean; canCollide?: boolean; transparency?: number;
 };
 type Project = {
   environmentPlan?: ScenePart[];
@@ -35,7 +39,7 @@ function downloadBlob(filename: string, blob: Blob) {
 }
 
 
-function PublishNowPanel() {
+function PublishNowPanel({ generatedPlaceFile }: { generatedPlaceFile: File | null }) {
   const [apiKey, setApiKey] = useState("");
   const [universeId, setUniverseId] = useState("");
   const [placeId, setPlaceId] = useState("");
@@ -43,9 +47,10 @@ function PublishNowPanel() {
   const [publishing, setPublishing] = useState(false);
   const [status, setStatus] = useState("");
   const [failed, setFailed] = useState(false);
+  const selectedPlaceFile = placeFile || generatedPlaceFile;
 
   async function publishNow() {
-    if (!apiKey || !universeId || !placeId || !placeFile) {
+    if (!apiKey || !universeId || !placeId || !selectedPlaceFile) {
       setFailed(true); setStatus("Complete all fields and select your Roblox place file."); return;
     }
     const confirmed = window.confirm("Publish this place file to the selected Roblox experience? This creates a new published version and updates the live game.");
@@ -56,7 +61,7 @@ function PublishNowPanel() {
       form.append("apiKey", apiKey);
       form.append("universeId", universeId.trim());
       form.append("placeId", placeId.trim());
-      form.append("placeFile", placeFile);
+      form.append("placeFile", selectedPlaceFile);
       const response = await fetch("/api/roblox/publish", { method: "POST", body: form });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Publishing failed.");
@@ -80,11 +85,11 @@ function PublishNowPanel() {
         <label>Place ID<input inputMode="numeric" value={placeId} onChange={e => setPlaceId(e.target.value)} placeholder="Place ID" /></label>
       </div>
       <label>New Roblox place file<input type="file" accept=".rbxlx,.rbxl" onChange={e => setPlaceFile(e.target.files?.[0] || null)} /></label>
-      {placeFile && <span className="publish-file-name">{placeFile.name} · {(placeFile.size / 1024 / 1024).toFixed(2)} MB</span>}
+      {selectedPlaceFile && <span className="publish-file-name">{generatedPlaceFile && !placeFile ? "Generated: " : "Selected: "}{selectedPlaceFile.name} · {(selectedPlaceFile.size / 1024 / 1024).toFixed(2)} MB</span>}
       <button className="generate-button publish-submit" onClick={publishNow} disabled={publishing}>{publishing ? <><LoaderCircle size={16} className="spin"/> Publishing...</> : <>Publish Now <ArrowUp size={16}/></>}</button>
       {status && <p className={failed ? "publish-status error" : "publish-status success"} role="status">{status}</p>}
     </div>
-    <p className="publish-security">Your API key is sent only for this request and is not saved by Madara AI. Use a key limited to the target experience with <strong>universe-places: Write</strong> permission. Current generator output is a script bundle; export a real .rbxlx/.rbxl from Studio before using this publisher.</p>
+    <p className="publish-security">Your API key is sent only for this request and is not saved by Madara AI. Use a key limited to the target experience with <strong>universe-places: Write</strong> permission. The generated .rbxlx includes the generated scene parts and Luau scripts, but it still must be opened and tested in Roblox Studio before publishing.</p>
     <a className="publish-doc-link" href="https://create.roblox.com/docs/cloud/guides/usage-place-publishing" target="_blank" rel="noreferrer">Roblox publishing setup guide <ExternalLink size={13}/></a>
   </section>;
 }
@@ -145,6 +150,7 @@ export default function Home() {
   const [copied, setCopied] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [progress, setProgress] = useState<Array<{ step: string; status: string; activity?: string; ts?: number }>>([]);
+  const [generatedPlaceFile, setGeneratedPlaceFile] = useState<File | null>(null);
 
   useEffect(() => {
     if (!loading) return;
@@ -228,6 +234,19 @@ export default function Home() {
     if (!project?.files[activeFile]) return;
     await navigator.clipboard.writeText(project.files[activeFile].code);
     setCopied(true); window.setTimeout(() => setCopied(false), 1800);
+  }
+
+  function exportRobloxPlace() {
+    if (!project) return;
+    try {
+      const xml = buildRobloxPlaceXml(project);
+      const filename = (project.projectName.toLowerCase().replace(/[^a-z0-9]+/g, "-") || "madara-game") + ".rbxlx";
+      const file = new File([xml], filename, { type: "application/xml" });
+      setGeneratedPlaceFile(file);
+      downloadBlob(filename, file);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Could not export the Roblox place file.");
+    }
   }
 
   function downloadProject() {
@@ -372,7 +391,7 @@ export default function Home() {
     </section>
 
     {project && <section className="result-wrap" aria-live="polite">
-      <div className="result-heading"><div><div className="section-kicker">YOUR GENERATED PROJECT</div><h2>{project.projectName}</h2><p>{project.summary}</p></div><button className="download-button" onClick={downloadProject}><Download size={16}/> Download project ZIP</button></div>
+      <div className="result-heading"><div><div className="section-kicker">YOUR GENERATED PROJECT</div><h2>{project.projectName}</h2><p>{project.summary}</p></div><div className="result-actions"><button className="download-button" onClick={exportRobloxPlace}><Download size={16}/> Export .rbxlx</button><button className="download-button" onClick={downloadProject}><Download size={16}/> Download project ZIP</button></div></div>
 
       {(project.environmentPlan?.length ?? 0) > 0 && <div className="scene-plan-note"><Globe2 size={16}/> <strong>{project.environmentPlan?.length} 3D objects</strong> are ready for direct construction by the Madara AI Studio Connector.</div>}
       {(project.environmentPlan?.length ?? 0) > 0 && <ScenePlanPreview parts={project.environmentPlan || []} />}
@@ -393,7 +412,7 @@ export default function Home() {
       <p className="publish-note">Madara AI uses separate planning, environment, gameplay and code-review agents. Scripts and map geometry still need testing in Roblox Studio. The ZIP is a Rojo source package, not a compiled Roblox place file.</p>
     </section>}
 
-    <StudioConnectorPanel />\n    <PublishNowPanel />\n\n    <section className="steps" id="how-it-works">
+    <StudioConnectorPanel />\n    <PublishNowPanel generatedPlaceFile={generatedPlaceFile} />\n\n    <section className="steps" id="how-it-works">
       <div className="section-kicker">FROM IDEA TO EXPERIENCE</div><h2>Your AI team starts here.</h2>
       <div className="steps-grid">
         <article className="step-card"><div className="step-icon"><BrainCircuit/></div><span>01 / ARCHITECT</span><h3>Plan the experience</h3><p>The architect defines the game loop, worlds, progression and systems.</p></article>
