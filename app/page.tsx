@@ -169,7 +169,8 @@ export default function Home() {
           const response = await fetch("/api/generate?runId=" + encodeURIComponent(savedRunId), { cache: "no-store" });
           const data = await response.json();
           if (!response.ok) throw new Error(data.error || "Could not resume generation.");
-          if (data.progress) setPipelineProgress(data.progress as PipelineProgress);\n          if (data.status === "COMPLETED" && data.project) {
+          if (data.progress) setPipelineProgress(data.progress as PipelineProgress);
+          if (data.status === "COMPLETED" && data.project) {
             window.localStorage.removeItem("madara-active-run");
             if (active) { setProject(data.project as Project); setActiveFile(0); }
             return;
@@ -210,7 +211,8 @@ export default function Home() {
         const statusResponse = await fetch("/api/generate?runId=" + encodeURIComponent(runId), { cache: "no-store" });
         const statusData = await statusResponse.json();
         if (!statusResponse.ok) throw new Error(statusData.error || "Could not read generation status.");
-        if (statusData.progress) setPipelineProgress(statusData.progress as PipelineProgress);\n        if (statusData.status === "COMPLETED" && statusData.project) {
+        if (statusData.progress) setPipelineProgress(statusData.progress as PipelineProgress);
+        if (statusData.status === "COMPLETED" && statusData.project) {
           window.localStorage.removeItem("madara-active-run");
           setProject(statusData.project as Project); setActiveFile(0);
           return;
@@ -395,7 +397,10 @@ export default function Home() {
       <p className="publish-note">Madara AI uses separate planning, environment, gameplay and code-review agents. Scripts and map geometry still need testing in Roblox Studio. The ZIP is a Rojo source package, not a compiled Roblox place file.</p>
     </section>}
 
-    <StudioConnectorPanel />\n    <PublishNowPanel />\n\n    <section className="steps" id="how-it-works">
+    <StudioConnectorPanel />
+    <PublishNowPanel />
+
+    <section className="steps" id="how-it-works">
       <div className="section-kicker">FROM IDEA TO EXPERIENCE</div><h2>Your AI team starts here.</h2>
       <div className="steps-grid">
         <article className="step-card"><div className="step-icon"><BrainCircuit/></div><span>01 / ARCHITECT</span><h3>Plan the experience</h3><p>The architect defines the game loop, worlds, progression and systems.</p></article>
