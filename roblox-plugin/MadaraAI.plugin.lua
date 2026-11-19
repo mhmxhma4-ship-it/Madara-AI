@@ -317,6 +317,10 @@ generateButton.Activated:Connect(function()
 					end)
 					if not pollDecodedOk or type(pollData) ~= "table" then
 						consecutiveErrors += 1
+						if consecutiveErrors >= 8 then
+							finish("The generation status service returned unreadable responses repeatedly. Check Inngest Runs before retrying.", COLORS.red)
+							return
+						end
 					elseif not pollResponse.Success then
 						consecutiveErrors += 1
 						local message = type(pollData.error) == "string" and pollData.error or ("Status API returned HTTP " .. tostring(pollResponse.StatusCode))
