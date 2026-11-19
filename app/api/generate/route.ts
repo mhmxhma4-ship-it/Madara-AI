@@ -18,7 +18,18 @@ export async function POST(request: NextRequest) {
     const mode = body.mode as BuildMode;
     if (!prompt || prompt.length > 5000) return NextResponse.json({ error: "Write a game idea between 1 and 5000 characters." }, { status: 400 });
     if (!allowedModes.includes(mode)) return NextResponse.json({ error: "Choose a valid creation mode." }, { status: 400 });
-    const handle = await tasks.trigger<typeof generateRobloxProject>("generate-roblox-project", { prompt, mode });
+    const handle = await tasks.trigger<typeof generateRobloxProject>(
+      "generate-roblox-project",
+      { prompt, mode },
+      { metadata: { pipelineProgress: {
+        stage: "architect",
+        title: "Po pergatitet gjenerimi",
+        detail: "Run-i u pranua dhe po pret agjentin e pare.",
+        next: "Game Architect",
+        completed: [],
+        status: "running"
+      } } }
+    );
     return NextResponse.json({ runId: handle.id, status: "QUEUED" }, { status: 202 });
   } catch (error) {
     console.error("Madara AI could not queue generation:", error);
@@ -31,12 +42,12 @@ export async function GET(request: NextRequest) {
   if (!/^run_[A-Za-z0-9_-]+$/.test(runId)) return NextResponse.json({ error: "Invalid generation ID." }, { status: 400 });
   try {
     const run = await runs.retrieve(runId);
-    if (run.status === "COMPLETED") return NextResponse.json({ status: run.status, project: run.output });
+    if (run.status === "COMPLETED") return NextResponse.json({ status: run.status, project: run.output, progress: run.metadata?.pipelineProgress ?? null });
     if (["FAILED", "CRASHED", "SYSTEM_FAILURE", "INTERRUPTED", "CANCELED", "EXPIRED"].includes(run.status)) {
       const error = typeof run.error === "string" ? run.error : "Background generation failed. Open Trigger.dev Runs to inspect the error.";
       return NextResponse.json({ status: run.status, error });
     }
-    return NextResponse.json({ status: run.status });
+    return NextResponse.json({ status: run.status, progress: run.metadata?.pipelineProgress ?? null });
   } catch (error) {
     console.error("Madara AI run lookup failed:", error);
     return NextResponse.json({ error: "Could not read generation status. Check TRIGGER_SECRET_KEY." }, { status: 503 });
