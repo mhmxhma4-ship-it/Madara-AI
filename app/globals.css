@@ -214,3 +214,29 @@ footer{max-width:1160px;margin:auto;border-top:1px solid var(--line);padding:23p
 .work-check{display:grid;place-items:center;flex:0 0 16px;width:16px;height:16px;border-radius:50%;background:rgba(167,139,250,.14);color:#c4b5fd}
 .current-work-panel>p{margin:11px 0 0;color:#858398;font-size:9px;line-height:1.55}
 @media(max-width:520px){.current-work-panel{padding:12px}.current-work-heading{flex-wrap:wrap}.current-work-heading>span{font-size:7px}.current-work-panel li{font-size:9px}}
+
+
+/* Live agent task tracker */
+.current-work-panel{margin-top:14px;padding:15px;border:1px solid #a78bfa35;border-radius:13px;background:linear-gradient(145deg,#a78bfa12,#090910b8)}
+.current-work-heading{display:flex;align-items:center;gap:8px;color:#e7ddff;font-size:12px}
+.current-work-heading>span{margin-left:auto;color:#a78bfa;font-size:9px;font-weight:800;letter-spacing:1px}
+.current-work-detail{margin:10px 0 13px;color:#c3bfd2;font-size:12px;line-height:1.65}
+.pipeline-next{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;border:1px solid #ffffff12;border-radius:9px;background:#ffffff06}
+.pipeline-next span{color:#9691aa;font-size:9px;font-weight:800;letter-spacing:1px}
+.pipeline-next strong{color:#e9ddff;font-size:11px;text-align:right}
+.pipeline-task-list{display:grid;gap:7px;margin-top:12px}
+.pipeline-task{display:flex;align-items:center;gap:10px;padding:10px;border:1px solid #ffffff10;border-radius:9px;background:#08081180;min-width:0}
+.pipeline-task-icon{width:25px;height:25px;flex:0 0 25px;display:grid;place-items:center;border-radius:8px;background:#ffffff0a;color:#88849b}
+.pipeline-task-copy{display:grid;gap:3px;min-width:0}
+.pipeline-task-copy strong{color:#d6d2e5;font-size:11px}
+.pipeline-task-copy small{overflow:hidden;color:#88859c;font-size:10px;text-overflow:ellipsis;white-space:nowrap}
+.pipeline-task em{margin-left:auto;color:#777389;font-size:8px;font-style:normal;font-weight:800;letter-spacing:.8px}
+.pipeline-task.active{border-color:#a78bfa75;background:#a78bfa12}
+.pipeline-task.active .pipeline-task-icon{background:#a78bfa20;color:#c4b5fd}
+.pipeline-task.active em{color:#c4b5fd}
+.pipeline-task.done{border-color:#22c55e35;background:#22c55e08}
+.pipeline-task.done .pipeline-task-icon{background:#22c55e18;color:#86efac}
+.pipeline-task.done em{color:#86efac}
+.pipeline-task-dot{width:6px;height:6px;border-radius:50%;background:#666276}
+.pipeline-truth-note{margin:12px 0 0!important;color:#858197!important;font-size:10px!important;line-height:1.6}
+@media(max-width:520px){.current-work-panel{padding:12px}.pipeline-task-copy small{white-space:normal}.pipeline-task{gap:8px}.pipeline-task em{font-size:7px}}

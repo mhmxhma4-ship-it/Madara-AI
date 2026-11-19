@@ -120,7 +120,19 @@ function findUnsafePatterns(files: GeneratedFile[]) {
 }
 
 
-export async function runGenerationPipeline(request: Request) {
+export type PipelineProgress = {
+  stage: string;
+  title: string;
+  detail: string;
+  next: string;
+  completed: string[];
+  status: "running" | "complete";
+};
+
+export async function runGenerationPipeline(
+  request: Request,
+  onProgress?: (progress: PipelineProgress) => void
+) {
   try {
     const contentLength = Number(request.headers.get("content-length") || 0);
     if (contentLength > 24_000) {
@@ -160,6 +172,22 @@ export async function runGenerationPipeline(request: Request) {
     if (!allowedModes.includes(mode)) {
       return Response.json({ error: "Choose a valid creation mode." }, { status: 400 });
     }
+
+    const reportProgress = (
+      stage: string,
+      title: string,
+      detail: string,
+      next: string,
+      completed: string[] = []
+    ) => onProgress?.({ stage, title, detail, next, completed, status: "running" });
+
+    reportProgress(
+      "architect",
+      "Game Architect po planifikon lojen",
+      "Po percakton gameplay loop, boten, progresin dhe sistemet kryesore.",
+      "Environment Agent",
+      []
+    );
 
     // Remove accidental whitespace/newlines from Vercel environment values before using them in headers.
     const cleanSecret = (value?: string) => value?.replace(/\s+/g, "");
@@ -444,6 +472,14 @@ export async function runGenerationPipeline(request: Request) {
       20 * 60_000
     );
 
+    reportProgress(
+      "environment",
+      "Game Architect perfundoi",
+      "Blueprint-i u krijua. Tani po ndertohet plani i hartes dhe ambientit 3D.",
+      "Gameplay Agent",
+      ["architect"]
+    );
+
     const blueprintContext = JSON.stringify({
       projectName: architect.projectName,
       summary: architect.summary,
@@ -468,6 +504,14 @@ export async function runGenerationPipeline(request: Request) {
       20 * 60_000
     );
 
+    reportProgress(
+      "gameplay",
+      "Environment Agent perfundoi",
+      "Plani i ambientit u krijua. Tani po shkruhen sistemet Luau dhe logjika e lojes.",
+      mode === "Full game" || mode === "UI interface" ? "Roblox UI Agent" : "Luau Reviewer",
+      ["architect", "environment"]
+    );
+
     const gameplay = await askAgent(
       "Gameplay Agent",
       `Build the complete playable game systems from this approved blueprint: ${blueprintContext}
@@ -476,6 +520,14 @@ export async function runGenerationPipeline(request: Request) {
       3800,
       "",
       180000
+    );
+
+    reportProgress(
+      "ui",
+      "Gameplay Agent perfundoi",
+      "Sistemet kryesore te lojes u gjeneruan. Tani po pergatitet nderfaqja.",
+      "Luau Reviewer",
+      ["architect", "environment", "gameplay"]
     );
 
     let interfaceAgent: JsonObject = { files: [], gameplayNotes: [] };
@@ -500,6 +552,16 @@ export async function runGenerationPipeline(request: Request) {
     } else if (mode === "Full game" || mode === "UI interface") {
       interfaceAgentError = "UI generation was skipped to preserve the core game package within the task time limit.";
     }
+
+    reportProgress(
+      "review",
+      "Agjentet e krijimit perfunduan",
+      "Po bashkohen skedaret dhe po kontrollohen gabimet, varesite dhe sigurine e kodit.",
+      "Final validation and export",
+      mode === "Full game" || mode === "UI interface"
+        ? ["architect", "environment", "gameplay", "ui"]
+        : ["architect", "environment", "gameplay"]
+    );
 
     const environmentFiles = validFiles(environment.files, 4);
     const gameplayFiles = validFiles(gameplay.files, 8);
@@ -560,6 +622,16 @@ export async function runGenerationPipeline(request: Request) {
       reviewWarnings.push("The automated code review did not finish. Review and test the generated scripts in Roblox Studio.");
     }
 
+    reportProgress(
+      "finalize",
+      "Kontrolli i kodit perfundoi",
+      reviewerCompleted
+        ? "Review u krye. Po behet kontrolli final i skedareve dhe planit 3D."
+        : "Review automatik nuk u kompletua; po behet kontrolli final i sigurise.",
+      "Project ready",
+      ["architect", "environment", "gameplay", ...(mode === "Full game" || mode === "UI interface" ? ["ui"] : []), "review"]
+    );
+
     // 4. Deterministic safety gate: never silently ship known-dangerous patterns.
     const safetyFindings = findUnsafePatterns(files);
     if (safetyFindings.length > 0) {
@@ -571,6 +643,15 @@ export async function runGenerationPipeline(request: Request) {
 
     const strings = (value: unknown, max = 12) =>
       Array.isArray(value) ? value.filter((item): item is string => typeof item === "string").slice(0, max) : [];
+
+    onProgress?.({
+      stage: "complete",
+      title: "Gjenerimi perfundoi me sukses",
+      detail: "Te gjitha fazat e pipeline-it perfunduan. Projekti eshte gati per shkarkim.",
+      next: "Project ready",
+      completed: ["architect", "environment", "gameplay", ...(mode === "Full game" || mode === "UI interface" ? ["ui"] : []), "review", "finalize"],
+      status: "complete"
+    });
 
     return Response.json({
       projectName: typeof architect.projectName === "string" ? architect.projectName.slice(0, 100) : "My Roblox Game",
