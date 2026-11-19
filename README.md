@@ -20,22 +20,21 @@ Mobile-first AI Roblox game builder using Next.js 15, TypeScript and Tailwind CS
 
 Add these in Vercel → Project → Settings → Environment Variables, then redeploy. API usage may cost money; configure provider billing and limits.
 
-## Long-running background generation (Trigger.dev)
+## Long-running background generation (Inngest)
 
-Game generation runs as a durable Trigger.dev task instead of inside a Vercel request. The task is configured with a maximum duration of 2 hours; this is an execution ceiling, not a promise that every build will take or need an hour. Provider rate limits, outages, token quotas and Trigger.dev plan credits still apply.
+Game generation runs as a durable Inngest function. The Architect, Environment, Gameplay, UI and Reviewer agents are separate durable steps so completed work is checkpointed and a single Vercel request does not need to run the entire pipeline. Each AI-agent step is capped at approximately four minutes to stay below the Vercel Hobby function limit; the overall Inngest run can continue across multiple requests.
 
 ### Connect the project
 
-1. In Trigger.dev, open project **Keli** and use the **Development** environment first.
-2. Connect the GitHub repository `mhmxhma4-ship-it/Madara-AI` using Trigger.dev's GitHub integration, or initialize/deploy with the Trigger.dev CLI from a computer.
-3. Create a Trigger.dev API key for that environment with **Trigger only** access.
-4. Add that key to Vercel as `TRIGGER_SECRET_KEY`, then redeploy the Next.js app.
-5. Add the AI provider variables below to the matching Trigger.dev environment (not only Vercel): `OPENAI_API_KEY`, `OPENAI_MODEL`, `OPENAI_BASE_URL`, and whichever optional provider keys you use (`GEMINI_API_KEY`, `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN`).
-6. Deploy/register the Trigger.dev task. The task is `generate-roblox-project`.
+1. Connect the **Madara AI** Vercel project using the Inngest Vercel integration.
+2. Keep the Inngest app enabled and its serving path set to `/api/inngest`.
+3. The Vercel integration should provide `INNGEST_EVENT_KEY` and `INNGEST_SIGNING_KEY` to the project. Confirm both exist in Vercel → Settings → Environment Variables, then redeploy.
+4. Deploy the Next.js app. Inngest should sync the functions from `/api/inngest` automatically.
+5. Confirm `generate-roblox-project` appears in Inngest → Functions before testing a generation.
 
-The Vercel route only starts a run and checks its status. The worker executes the generation pipeline. Development and Production have separate keys and environment variables; repeat the setup for Production before using the production website.
+For local development, run the Inngest Dev Server with `npx inngest-cli@latest dev` alongside `npm run dev`.
 
-Trigger.dev's Free plan is not unlimited compute: task count, runtime credits, concurrency and provider API limits remain separate constraints. Set a billing limit in Trigger.dev and provider dashboards to avoid unexpected charges.
+Inngest is durable orchestration, not unlimited AI compute. Provider rate limits, model availability, execution quotas and Vercel request limits still apply. Set usage limits in the Inngest and AI-provider dashboards.
 
 ## Run locally
 ```bash
