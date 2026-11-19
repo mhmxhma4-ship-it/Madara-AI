@@ -56,14 +56,14 @@ export async function GET(request: NextRequest) {
       headers: { Authorization: `Bearer ${signingKey}` },
       cache: "no-store",
     });
-    let progress: Array<{ step: string; status: string; ts?: number }> = [];
+    let progress: Array<{ step: string; status: string; activity?: string; ts?: number }> = [];
     if (progressResponse.ok) {
       const progressPayload = await progressResponse.json() as {
-        data?: Array<{ data?: { runId?: string; step?: string; status?: string }; ts?: number }>;
+        data?: Array<{ data?: { runId?: string; step?: string; status?: string; activity?: string }; ts?: number }>;
       };
       progress = (progressPayload.data || [])
         .filter(item => item.data?.runId === eventId && typeof item.data.step === "string" && typeof item.data.status === "string")
-        .map(item => ({ step: item.data!.step!, status: item.data!.status!, ts: item.ts }))
+        .map(item => ({ step: item.data!.step!, status: item.data!.status!, activity: typeof item.data!.activity === "string" ? item.data!.activity : undefined, ts: item.ts }))
         .sort((left, right) => (left.ts || 0) - (right.ts || 0));
     }
 
