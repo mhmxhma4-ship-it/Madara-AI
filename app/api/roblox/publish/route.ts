@@ -74,7 +74,9 @@ export async function POST(request: NextRequest) {
         409: "This Place ID does not belong to the selected Universe ID.",
         413: "The place file is too large for Roblox Open Cloud.",
       };
-      return json(messages[upstream.status] || `Roblox publishing failed (${upstream.status}).`, upstream.status >= 500 ? 502 : upstream.status);
+      const upstreamDetail = responseText.trim().slice(0, 1200);
+      const diagnostic = upstreamDetail ? ` Roblox details: ${upstreamDetail}` : "";
+      return json((messages[upstream.status] || `Roblox publishing failed (${upstream.status}).`) + diagnostic, upstream.status >= 500 ? 502 : upstream.status);
     }
 
     return NextResponse.json({
