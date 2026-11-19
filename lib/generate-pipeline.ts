@@ -526,7 +526,39 @@ export async function runGenerationPipeline(request: Request, stepRunner?: Pipel
     const interfaceFiles = validFiles(interfaceAgent.files, 3);
     let files = uniqueByPath([...environmentFiles, ...gameplayFiles, ...interfaceFiles]).slice(0, 16);
 
-    const environmentPlan = validScenePlan(environment.buildPlan);
+    let environmentPlan = validScenePlan(environment.buildPlan);
+    if (mode === "Full game" && environmentPlan.length < 10) {
+      // Recover a sparse environment plan instead of rejecting the entire game.
+      // Keep valid original objects and ask only for additional, non-duplicate map pieces.
+      for (let mapAttempt = 1; mapAttempt <= 2 && environmentPlan.length < 10; mapAttempt++) {
+        try {
+          const neededObjects = Math.max(12, 25 - environmentPlan.length);
+          const mapRecovery = await runStep(`environment-recovery-${mapAttempt}`, () => askAgent(
+            "Environment Recovery Agent",
+            `The original map plan is incomplete. Generate ONLY additional Roblox 3D scene objects to complete this existing map. Return JSON with buildPlan: array of 15-30 objects {name,parentPath,className,position,size,color,material,shape,rotation,anchored,canCollide,transparency}. Do not return scripts, notes or a new blueprint. Add at least ${neededObjects} useful objects with unique names and placements that extend the current map: terrain details, paths, boundaries, landmarks, buildings, props, vegetation and spawn-area details appropriate to the game. Avoid duplicates of existing names and positions. Use believable scale, grounded placements, natural materials and coherent traversal. No filler piles or repetitive platforms. className must be Part or SpawnLocation; parentPath is relative to Workspace such as World/SpawnArea. Use finite numeric x/y/z values, size values above 0.2, and RGB color channels from 0 to 1. Return valid JSON only.`,
+            2200,
+            JSON.stringify({
+              blueprint: blueprintContext,
+              existingSceneObjects: environmentPlan.map(part => ({
+                name: part.name, parentPath: part.parentPath, className: part.className,
+                position: part.position, size: part.size
+              })),
+              requiredAdditionalObjects: neededObjects
+            }),
+            180_000
+          ));
+          const additions = validScenePlan(mapRecovery.buildPlan);
+          environmentPlan = [...environmentPlan, ...additions].filter((part, index, all) =>
+            all.findIndex(other =>
+              other.parentPath.toLowerCase() === part.parentPath.toLowerCase() &&
+              other.name.toLowerCase() === part.name.toLowerCase()
+            ) === index
+          ).slice(0, 100);
+        } catch (mapRepairError) {
+          console.warn(`Madara AI environment recovery attempt ${mapAttempt} failed:`, mapRepairError);
+        }
+      }
+    }
     if (mode === "Full game") {
       // A model may return fewer Gameplay Agent files while the UI or Environment
       // Agent already supplied a valid client/module. Validate the merged package,
@@ -581,7 +613,7 @@ export async function runGenerationPipeline(request: Request, stepRunner?: Pipel
       }
       if (environmentPlan.length < 10) {
         return Response.json({
-          error: "The environment agent returned too few 3D objects for a complete game map. Madara AI stopped the export rather than labeling an unfinished map as complete. Try again with a smaller or more specific world layout."
+          error: "Madara AI generated the game scripts, but the map remained incomplete after two automatic recovery attempts. No incomplete ZIP was created. Try a more specific world layout or retry when the AI providers are available."
         }, { status: 502 });
       }
     }
