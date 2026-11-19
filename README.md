@@ -10,7 +10,7 @@ Mobile-first AI Roblox game builder using Next.js 15, TypeScript and Tailwind CS
 - Separate Luau review pass and deterministic unsafe-code checks.
 - Deterministic checks for unsafe dynamic code and unverified numeric asset requires.
 - Structured Luau project files and Roblox Studio setup instructions.
-- Code preview, copy and structured Rojo-compatible ZIP export.
+- Code preview, copy, structured Rojo-compatible ZIP export and generated Roblox XML place-file export (`.rbxlx`).
 - Provider secrets stay on the server.
 
 ## Required Vercel environment variables
@@ -45,7 +45,7 @@ npm run dev
 ## Roblox workflow and limitation
 Madara AI generates Luau source files and setup instructions. Use the Studio Connector plugin to insert scripts directly, or download the structured Rojo-compatible ZIP and use it with Rojo. Review and test before publishing.
 
-Direct Roblox publishing requires a valid place file and authorized Open Cloud credentials. This app does not yet convert generated scripts into a complete .rbxl place file or publish an untested game. The automated reviewer is not a substitute for running the project in Roblox Studio. A safe publishing pipeline needs a trusted place-building/export step. Never expose Roblox credentials in browser code.
+Madara AI can export the generated scene parts and Luau scripts into a Roblox XML place file (`.rbxlx`) directly from the generated result. Open the exported file in Roblox Studio and test it before publishing. The automated reviewer is not a substitute for running the project in Roblox Studio. Never expose Roblox credentials in browser code.
 
 ## Safety
 Generated scripts are untrusted output. Review before running. Never use executor scripts, unknown asset requires or unreviewed third-party modules.
@@ -57,14 +57,15 @@ Madara AI can publish a real Roblox place file to an existing experience using R
 
 1. In Creator Dashboard, create an API key with **universe-places → Write** permission for the target experience.
 2. Copy the target experience's **Universe ID** and the target place's **Place ID**.
-3. Export/save a valid `.rbxlx` or `.rbxl` place file from Roblox Studio.
-4. Open Madara AI's **Publish Now** section, enter the API key and IDs, select the place file, and confirm publishing.
+3. Generate your game in Madara AI, then click **Export .rbxlx** in the result panel. This creates a place file containing the generated scene parts and Luau scripts.
+4. Open the exported `.rbxlx` in Roblox Studio, inspect the map and scripts, and run Play tests. Save a backup before publishing.
+5. Open Madara AI's **Publish Now** section. The generated `.rbxlx` is attached automatically; enter the API key and IDs, then confirm publishing.
 
 The publisher accepts place files up to 10 MB. The API key is used for the request and is not saved by Madara AI. Do not share it with anyone.
 
 **Important:** Publishing replaces the selected place's current published content with the uploaded place file. Keep a backup before publishing. Roblox retains place version history, but this app does not currently create or restore backups automatically.
 
-The current AI generator returns Luau script bundles, not complete `.rbxlx`/`.rbxl` place files. Insert and test the generated scripts in Studio, then export the resulting place file before using Publish Now. The publisher does not yet convert the script bundle into a complete place automatically.
+The `.rbxlx` exporter serializes the generated scene plan into Workspace parts/folders and maps generated server, client and module scripts into their Roblox services. It does not run Roblox Studio's compiler or simulate gameplay; opening and testing the file in Studio remains mandatory. Unsupported or invalid generated paths stop export rather than being silently dropped.
 
 Official guide: https://create.roblox.com/docs/cloud/guides/usage-place-publishing
 

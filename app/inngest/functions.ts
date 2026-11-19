@@ -15,11 +15,16 @@ export const generateRobloxProject = inngest.createFunction(
       body: JSON.stringify({ prompt, mode }),
     });
 
+    const normalizeProgressStep = (stepName: string) =>
+      stepName.startsWith("environment-recovery") ? "environment-recovery" :
+      stepName.startsWith("package-recovery") ? "package-recovery" : stepName;
+
     const emitProgress = async (stepName: string, status: "running" | "complete" | "failed") => {
+      const progressStep = normalizeProgressStep(stepName);
       await step.run(`progress-${stepName}-${status}`, async () => {
         await inngest.send({
           name: "madara/generation.progress",
-          data: { runId: event.id, step: stepName, status },
+          data: { runId: event.id, step: progressStep, status },
         });
         return { sent: true };
       });
@@ -29,7 +34,7 @@ export const generateRobloxProject = inngest.createFunction(
       try {
         await inngest.send({
           name: "madara/generation.progress",
-          data: { runId: event.id, step: ({ "Game Architect": "architect", "Environment Agent": "environment", "Gameplay Agent": "gameplay", "Roblox UI Agent": "ui-agent", "Luau Code Reviewer": "code-review" } as Record<string, string>)[agent] || "agent", status: "running", activity },
+          data: { runId: event.id, step: ({ "Game Architect": "architect", "Environment Agent": "environment", "Environment Recovery Agent": "environment-recovery", "Gameplay Agent": "gameplay", "Package Recovery Agent": "package-recovery", "Roblox UI Agent": "ui-agent", "Luau Code Reviewer": "code-review" } as Record<string, string>)[agent] || "agent", status: "running", activity },
         });
       } catch (error) {
         console.warn("Madara AI activity update could not be sent:", error);

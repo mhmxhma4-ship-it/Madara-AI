@@ -93,7 +93,7 @@ local endpoint = make("TextBox", {
 	Size = UDim2.new(1, 0, 0, 34),
 	BackgroundColor3 = COLORS.field,
 	BorderSizePixel = 0,
-	Text = "https://madara-ai.vercel.app",
+	Text = "https://madarabot.vercel.app",
 	PlaceholderText = "Madara AI website URL",
 	TextColor3 = COLORS.text,
 	PlaceholderColor3 = COLORS.muted,
@@ -230,8 +230,13 @@ end
 
 generateButton.Activated:Connect(function()
 	if busy then return end
-	if #prompt.Text < 5 then
+	local gamePrompt = string.gsub(prompt.Text, "^%s*(.-)%s*$", "%1")
+	if #gamePrompt < 5 then
 		setStatus("Describe your game idea first.", COLORS.red)
+		return
+	end
+	if #gamePrompt > 5000 then
+		setStatus("Your game idea is too long. Maximum 5000 characters.", COLORS.red)
 		return
 	end
 
@@ -243,79 +248,152 @@ generateButton.Activated:Connect(function()
 
 	busy = true
 	generateButton.Text = "AI agents are working..."
+	generateButton.Active = false
 	insertButton.Visible = false
 	generatedProject = nil
-	setStatus("Connecting to Madara AI. The agents are planning and generating your project...")
-
-	local ok, result = pcall(function()
-		return HttpService:RequestAsync({
-			Url = baseUrl .. "/api/generate",
-			Method = "POST",
-			Headers = {["Content-Type"] = "application/json"},
-			Body = HttpService:JSONEncode({
-				prompt = prompt.Text,
-				mode = mode,
-			}),
-		})
-	end)
-
-	if not ok then
-		setStatus("Connection failed. Check the website URL and allow HTTP requests for this plugin. Details: " .. tostring(result), COLORS.red)
-		busy = false
-		generateButton.Text = "Generate with AI agents"
-		return
-	end
-
-	if not result.Success then
-		local message = "Madara AI returned HTTP " .. tostring(result.StatusCode)
-		local decodedOk, decoded = pcall(function()
-			return HttpService:JSONDecode(result.Body)
-		end)
-		if decodedOk and type(decoded) == "table" and type(decoded.error) == "string" then
-			message = decoded.error
-		end
-		setStatus(message, COLORS.red)
-		busy = false
-		generateButton.Text = "Generate with AI agents"
-		return
-	end
-
-	local decodedOk, decoded = pcall(function()
-		return HttpService:JSONDecode(result.Body)
-	end)
-	if not decodedOk or type(decoded) ~= "table" or type(decoded.files) ~= "table" or #decoded.files == 0 then
-		setStatus("Madara AI returned an invalid project response.", COLORS.red)
-		busy = false
-		generateButton.Text = "Generate with AI agents"
-		return
-	end
-
-	generatedProject = decoded
 	pendingInsertConfirmation = false
-	local warningCount = 0
-	if type(decoded.agents) == "table" then
-		for _, agent in ipairs(decoded.agents) do
-			if type(agent) == "table" and agent.status == "warning" then warningCount += 1 end
+
+	task.spawn(function()
+		local function finish(message: string, color: Color3?)
+			setStatus(message, color)
+			busy = false
+			generateButton.Text = "Generate with AI agents"
+			generateButton.Active = true
 		end
-	end
-	if type(decoded.agentNotes) == "table" then
-		for _, note in ipairs(decoded.agentNotes) do
-			if type(note) == "string" and string.find(string.lower(note), "warning", 1, true) then
-				warningCount += 1
+
+		local requestOk, startResponse = pcall(function()
+			return HttpService:RequestAsync({
+				Url = baseUrl .. "/api/generate",
+				Method = "POST",
+				Headers = {["Content-Type"] = "application/json"},
+				Body = HttpService:JSONEncode({ prompt = gamePrompt, mode = mode }),
+			})
+		end)
+		if not requestOk then
+			finish("Connection failed. Check the URL and allow HTTP requests. Details: " .. tostring(startResponse), COLORS.red)
+			return
+		end
+
+		local startDecodedOk, startData = pcall(function()
+			return HttpService:JSONDecode(startResponse.Body)
+		end)
+		if not startDecodedOk or type(startData) ~= "table" then
+			finish("Madara AI returned an unreadable queue response (HTTP " .. tostring(startResponse.StatusCode) .. ").", COLORS.red)
+			return
+		end
+		if not startResponse.Success then
+			finish(type(startData.error) == "string" and startData.error or ("Madara AI returned HTTP " .. tostring(startResponse.StatusCode)), COLORS.red)
+			return
+		end
+
+		local completedProject: any = nil
+		if startData.status == "COMPLETED" and type(startData.project) == "table" then
+			completedProject = startData.project
+		elseif type(startData.runId) == "string" and #startData.runId >= 10 then
+			local runId = startData.runId
+			local deadline = os.clock() + 115 * 60
+			local consecutiveErrors = 0
+			setStatus("Generation queued. Waiting for the AI agents to start...", COLORS.muted)
+
+			while os.clock() < deadline do
+				task.wait(4)
+				local pollOk, pollResponse = pcall(function()
+					return HttpService:RequestAsync({
+						Url = baseUrl .. "/api/generate?runId=" .. HttpService:UrlEncode(runId),
+						Method = "GET",
+						Headers = {["Cache-Control"] = "no-cache"},
+					})
+				end)
+
+				if not pollOk then
+					consecutiveErrors += 1
+					if consecutiveErrors >= 8 then
+						finish("Could not reach the generation status service after repeated retries. Your queued run may still be active; reopen the plugin and retry after checking Inngest.", COLORS.red)
+						return
+					end
+				else
+					local pollDecodedOk, pollData = pcall(function()
+						return HttpService:JSONDecode(pollResponse.Body)
+					end)
+					if not pollDecodedOk or type(pollData) ~= "table" then
+						consecutiveErrors += 1
+						if consecutiveErrors >= 8 then
+							finish("The generation status service returned unreadable responses repeatedly. Check Inngest Runs before retrying.", COLORS.red)
+							return
+						end
+					elseif not pollResponse.Success then
+						consecutiveErrors += 1
+						local message = type(pollData.error) == "string" and pollData.error or ("Status API returned HTTP " .. tostring(pollResponse.StatusCode))
+						if pollResponse.StatusCode < 500 or consecutiveErrors >= 8 then
+							finish(message, COLORS.red)
+							return
+						end
+					else
+						consecutiveErrors = 0
+						local currentActivity = nil
+						if type(pollData.progress) == "table" then
+							for _, item in ipairs(pollData.progress) do
+								if type(item) == "table" and item.status == "running" then
+									currentActivity = type(item.activity) == "string" and item.activity or ("Working on " .. tostring(item.step) .. "...")
+								end
+							end
+						end
+						if currentActivity then
+							setStatus("AI generation is running:\n" .. currentActivity, COLORS.muted)
+						elseif pollData.status == "QUEUED" then
+							setStatus("Your project is queued. Waiting for an available AI worker...", COLORS.muted)
+						end
+
+						if pollData.status == "COMPLETED" and type(pollData.project) == "table" then
+							completedProject = pollData.project
+							break
+						elseif pollData.status == "FAILED" then
+							finish(type(pollData.error) == "string" and pollData.error or "AI generation failed. Check Inngest Runs for details.", COLORS.red)
+							return
+						end
+					end
+				end
+			end
+			if not completedProject then
+				finish("Generation is still running or exceeded the 115-minute wait. Check Inngest Runs before starting another request.", COLORS.red)
+				return
+			end
+		else
+			finish(type(startData.error) == "string" and startData.error or "Madara AI did not return a valid Inngest run ID.", COLORS.red)
+			return
+		end
+
+		if type(completedProject.files) ~= "table" or type(completedProject.environmentPlan) ~= "table" then
+			finish("Madara AI completed but returned an invalid project package. No scripts or map were inserted.", COLORS.red)
+			return
+		end
+		if #completedProject.files == 0 and #completedProject.environmentPlan == 0 then
+			finish("Madara AI completed without usable scripts or map objects. Nothing was inserted.", COLORS.red)
+			return
+		end
+
+		generatedProject = completedProject
+		pendingInsertConfirmation = false
+		local warningCount = 0
+		if type(completedProject.agents) == "table" then
+			for _, agent in ipairs(completedProject.agents) do
+				if type(agent) == "table" and agent.status == "warning" then warningCount += 1 end
 			end
 		end
-	end
-	local sceneCount = type(decoded.environmentPlan) == "table" and #decoded.environmentPlan or 0
-	setStatus(
-		"Project ready: " .. tostring(decoded.projectName or "Roblox Game")
-			.. "\n" .. tostring(#decoded.files) .. " scripts + " .. tostring(sceneCount) .. " 3D objects."
-			.. (warningCount > 0 and (" Review warnings: " .. tostring(warningCount) .. ".") or "")
-			.. "\nTap Insert only after reviewing the project.",
-		warningCount > 0 and Color3.fromRGB(255, 190, 90) or COLORS.green
-	)
-	insertButton.Visible = true
-	busy = false
-	generateButton.Text = "Generate again"
+		local sceneCount = #completedProject.environmentPlan
+		local fileCount = #completedProject.files
+		setStatus(
+			"Project ready: " .. tostring(completedProject.projectName or "Roblox Game")
+				.. "\n" .. tostring(fileCount) .. " scripts + " .. tostring(sceneCount) .. " 3D objects."
+				.. (warningCount > 0 and (" Review warnings: " .. tostring(warningCount) .. ".") or "")
+				.. "\nReview the project, then tap Insert.",
+			warningCount > 0 and Color3.fromRGB(255, 190, 90) or COLORS.green
+		)
+		insertButton.Visible = true
+		busy = false
+		generateButton.Text = "Generate again"
+		generateButton.Active = true
+	end)
 end)
 
 local allowedServices: {[string]: boolean} = {

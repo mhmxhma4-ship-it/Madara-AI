@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { strToU8, zipSync } from "fflate";
+import { buildRobloxPlaceXml } from "@/lib/roblox-place";
 import { ArrowUp, Check, Code2, Copy, Download, ExternalLink, Gamepad2, Github, Layers3, LoaderCircle, Sparkles, WandSparkles, X, BrainCircuit, Globe2, Workflow, Clock3, Activity } from "lucide-react";
 
 type GeneratedFile = { path: string; kind: string; code: string };
@@ -10,6 +11,9 @@ type ScenePart = {
   position: { x: number; y: number; z: number };
   size: { x: number; y: number; z: number };
   color: { r: number; g: number; b: number };
+  material?: string; shape?: "Block" | "Ball" | "Cylinder";
+  rotation?: { x: number; y: number; z: number };
+  anchored?: boolean; canCollide?: boolean; transparency?: number;
 };
 type Project = {
   environmentPlan?: ScenePart[];
@@ -35,7 +39,7 @@ function downloadBlob(filename: string, blob: Blob) {
 }
 
 
-function PublishNowPanel() {
+function PublishNowPanel({ generatedPlaceFile }: { generatedPlaceFile: File | null }) {
   const [apiKey, setApiKey] = useState("");
   const [universeId, setUniverseId] = useState("");
   const [placeId, setPlaceId] = useState("");
@@ -43,9 +47,10 @@ function PublishNowPanel() {
   const [publishing, setPublishing] = useState(false);
   const [status, setStatus] = useState("");
   const [failed, setFailed] = useState(false);
+  const selectedPlaceFile = placeFile || generatedPlaceFile;
 
   async function publishNow() {
-    if (!apiKey || !universeId || !placeId || !placeFile) {
+    if (!apiKey || !universeId || !placeId || !selectedPlaceFile) {
       setFailed(true); setStatus("Complete all fields and select your Roblox place file."); return;
     }
     const confirmed = window.confirm("Publish this place file to the selected Roblox experience? This creates a new published version and updates the live game.");
@@ -56,7 +61,7 @@ function PublishNowPanel() {
       form.append("apiKey", apiKey);
       form.append("universeId", universeId.trim());
       form.append("placeId", placeId.trim());
-      form.append("placeFile", placeFile);
+      form.append("placeFile", selectedPlaceFile);
       const response = await fetch("/api/roblox/publish", { method: "POST", body: form });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Publishing failed.");
@@ -80,11 +85,11 @@ function PublishNowPanel() {
         <label>Place ID<input inputMode="numeric" value={placeId} onChange={e => setPlaceId(e.target.value)} placeholder="Place ID" /></label>
       </div>
       <label>New Roblox place file<input type="file" accept=".rbxlx,.rbxl" onChange={e => setPlaceFile(e.target.files?.[0] || null)} /></label>
-      {placeFile && <span className="publish-file-name">{placeFile.name} · {(placeFile.size / 1024 / 1024).toFixed(2)} MB</span>}
+      {selectedPlaceFile && <span className="publish-file-name">{generatedPlaceFile && !placeFile ? "Generated: " : "Selected: "}{selectedPlaceFile.name} · {(selectedPlaceFile.size / 1024 / 1024).toFixed(2)} MB</span>}
       <button className="generate-button publish-submit" onClick={publishNow} disabled={publishing}>{publishing ? <><LoaderCircle size={16} className="spin"/> Publishing...</> : <>Publish Now <ArrowUp size={16}/></>}</button>
       {status && <p className={failed ? "publish-status error" : "publish-status success"} role="status">{status}</p>}
     </div>
-    <p className="publish-security">Your API key is sent only for this request and is not saved by Madara AI. Use a key limited to the target experience with <strong>universe-places: Write</strong> permission. Current generator output is a script bundle; export a real .rbxlx/.rbxl from Studio before using this publisher.</p>
+    <p className="publish-security">Your API key is sent only for this request and is not saved by Madara AI. Use a key limited to the target experience with <strong>universe-places: Write</strong> permission. The generated .rbxlx includes the generated scene parts and Luau scripts, but it still must be opened and tested in Roblox Studio before publishing.</p>
     <a className="publish-doc-link" href="https://create.roblox.com/docs/cloud/guides/usage-place-publishing" target="_blank" rel="noreferrer">Roblox publishing setup guide <ExternalLink size={13}/></a>
   </section>;
 }
@@ -145,6 +150,7 @@ export default function Home() {
   const [copied, setCopied] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [progress, setProgress] = useState<Array<{ step: string; status: string; activity?: string; ts?: number }>>([]);
+  const [generatedPlaceFile, setGeneratedPlaceFile] = useState<File | null>(null);
 
   useEffect(() => {
     if (!loading) return;
@@ -189,7 +195,7 @@ export default function Home() {
 
   async function generate() {
     if (!prompt.trim()) { setError("Write your Roblox game idea first."); return; }
-    setElapsedSeconds(0); setLoading(true); setError(""); setProject(null);
+    setElapsedSeconds(0); setLoading(true); setError(""); setProject(null); setGeneratedPlaceFile(null);
     try {
       const startResponse = await fetch("/api/generate", {
         method: "POST", headers: { "Content-Type": "application/json" },
@@ -228,6 +234,19 @@ export default function Home() {
     if (!project?.files[activeFile]) return;
     await navigator.clipboard.writeText(project.files[activeFile].code);
     setCopied(true); window.setTimeout(() => setCopied(false), 1800);
+  }
+
+  function exportRobloxPlace() {
+    if (!project) return;
+    try {
+      const xml = buildRobloxPlaceXml(project);
+      const filename = (project.projectName.toLowerCase().replace(/[^a-z0-9]+/g, "-") || "madara-game") + ".rbxlx";
+      const file = new File([xml], filename, { type: "application/xml" });
+      setGeneratedPlaceFile(file);
+      downloadBlob(filename, file);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Could not export the Roblox place file.");
+    }
   }
 
   function downloadProject() {
@@ -320,15 +339,26 @@ export default function Home() {
   const progressStages = [
     { id: "architect", title: "Game Architect", description: "Analizon idene dhe krijon planin e lojes." },
     { id: "environment", title: "Environment Agent", description: "Nderton planin e hartes dhe objekteve 3D." },
+    { id: "environment-recovery", title: "Map Recovery Agent", description: "Ploteson objektet e hartes qe mungojne." },
     { id: "gameplay", title: "Gameplay Agent", description: "Krijon sistemet, mekanikat dhe skriptet Luau." },
+    { id: "package-recovery", title: "Package Recovery Agent", description: "Ploteson skriptet e detyrueshme qe mungojne." },
     { id: "ui-agent", title: "UI Agent", description: "Nderton nderfaqen mobile dhe kontrollet." },
     { id: "code-review", title: "Code Reviewer", description: "Kontrollon kodin dhe rregullon gabimet e gjetura." }
   ];
-  const activeProgress = progress.find(item => item.status === "running");
+  const latestProgressByStep = progress.reduce((latest, item) => {
+    latest[item.step] = item;
+    return latest;
+  }, {} as Record<string, (typeof progress)[number]>);
+  const activeProgress = Object.values(latestProgressByStep)
+    .filter(item => item.status === "running")
+    .sort((left, right) => (right.ts || 0) - (left.ts || 0))[0];
   const latestProgress = progress.length ? progress[progress.length - 1] : null;
   const latestActivity = [...progress].reverse().find(item => item.activity)?.activity;
-  const visibleProgressStages = progressStages.filter(stage => stage.id !== "ui-agent" || ["Full game", "UI interface"].includes(mode));
-  const completedProgressCount = visibleProgressStages.filter(stage => progress.some(item => item.step === stage.id && item.status === "complete")).length;
+  const visibleProgressStages = progressStages.filter(stage =>
+    (stage.id !== "ui-agent" || ["Full game", "UI interface"].includes(mode)) &&
+    (!["environment-recovery", "package-recovery"].includes(stage.id) || progress.some(item => item.step === stage.id))
+  );
+  const completedProgressCount = visibleProgressStages.filter(stage => latestProgressByStep[stage.id]?.status === "complete").length;
   const progressPercent = Math.round((completedProgressCount / visibleProgressStages.length) * 100);
 
 
@@ -355,13 +385,13 @@ export default function Home() {
         <textarea id="game-prompt" maxLength={5000} value={prompt} onChange={e => setPrompt(e.target.value)} placeholder={"Describe the Roblox game you want to create...\n\nExample: An anime simulator with 5 worlds, character companions, quests, boss fights and rebirths."}/>
         <div className="prompt-footer"><span>{prompt.length} / 5000</span><button className="generate-button" onClick={generate} disabled={loading}>{loading ? <><LoaderCircle size={16} className="spin"/> Agents working...</> : <><Sparkles size={16}/> Generate project <ArrowUp size={16}/></>}</button></div>
         {error && <p className="error-message" role="alert"><X size={15}/>{error}</p>}
-        {loading && <div className="agent-running"><div className="agent-running-title"><Workflow size={16}/> MADARA AGENT PIPELINE <span className="pipeline-live"><i/> LIVE</span></div><div className="generation-stats"><div className="generation-stat"><span><Clock3 size={14}/> KOHA LIVE</span><strong>{elapsedLabel}</strong></div><div className="generation-stat"><span><Activity size={14}/> HAPA TE MBARUAR</span><strong>{completedProgressCount}/{visibleProgressStages.length}</strong></div></div><div className="generation-progress-track" role="progressbar" aria-label="Completed agent stages" aria-valuemin={0} aria-valuemax={visibleProgressStages.length} aria-valuenow={completedProgressCount}><div className="generation-progress-fill" style={{ width: progressPercent + "%" }}/></div><div className="generation-progress-caption"><span>Progres real i agjenteve</span><span>{progressPercent}%</span></div><div className="current-work-panel"><div className="current-work-heading"><WandSparkles size={14}/><strong>{activeProgress ? `Po punohet: ${progressStages.find(stage => stage.id === activeProgress.step)?.title || activeProgress.step}` : latestProgress?.status === "complete" ? "Po pergatitet faza tjeter" : "Po pret nisjen e agjenteve"}</strong><span>LIVE</span></div><p>{activeProgress ? progressStages.find(stage => stage.id === activeProgress.step)?.description : "Statusi perditesohet nga hapat reale te Inngest."}</p>{latestActivity && <div className="live-activity-detail"><span>AKTIVITETI AKTUAL</span><strong>{latestActivity}</strong></div>}<ol className="generation-stage-list">{visibleProgressStages.map((stage, index) => { const item = progress.some(entry => entry.step === stage.id && entry.status === "complete"); const running = activeProgress?.step === stage.id; const failed = progress.some(entry => entry.step === stage.id && entry.status === "failed"); const skipped = false; return <li key={stage.id} className={item ? "stage-complete" : running ? "stage-running" : failed ? "stage-failed" : ""}><span className="stage-indicator">{item ? <Check size={13}/> : failed ? <X size={13}/> : index + 1}</span><span><strong>{stage.title}</strong><small>{item ? "Perfundoi" : running ? "Ne proces..." : failed ? "Nuk perfundoi" : skipped ? "Kalohet per kete mode" : "Ne pritje"}</small></span></li>; })}</ol><p>Shenjat e perfundimit dalin vetem kur hapi real mbaron. Koha e kaluar nuk paraqitet si perqindje e rreme e punes.</p></div></div>}
+        {loading && <div className="agent-running"><div className="agent-running-title"><Workflow size={16}/> MADARA AGENT PIPELINE <span className="pipeline-live"><i/> LIVE</span></div><div className="generation-stats"><div className="generation-stat"><span><Clock3 size={14}/> KOHA LIVE</span><strong>{elapsedLabel}</strong></div><div className="generation-stat"><span><Activity size={14}/> HAPA TE MBARUAR</span><strong>{completedProgressCount}/{visibleProgressStages.length}</strong></div></div><div className="generation-progress-track" role="progressbar" aria-label="Completed agent stages" aria-valuemin={0} aria-valuemax={visibleProgressStages.length} aria-valuenow={completedProgressCount}><div className="generation-progress-fill" style={{ width: progressPercent + "%" }}/></div><div className="generation-progress-caption"><span>Progres real i agjenteve</span><span>{progressPercent}%</span></div><div className="current-work-panel"><div className="current-work-heading"><WandSparkles size={14}/><strong>{activeProgress ? `Po punohet: ${progressStages.find(stage => stage.id === activeProgress.step)?.title || activeProgress.step}` : latestProgress?.status === "complete" ? "Po pergatitet faza tjeter" : "Po pret nisjen e agjenteve"}</strong><span>LIVE</span></div><p>{activeProgress ? progressStages.find(stage => stage.id === activeProgress.step)?.description : "Statusi perditesohet nga hapat reale te Inngest."}</p>{latestActivity && <div className="live-activity-detail"><span>AKTIVITETI AKTUAL</span><strong>{latestActivity}</strong></div>}<ol className="generation-stage-list">{visibleProgressStages.map((stage, index) => { const item = latestProgressByStep[stage.id]?.status === "complete"; const running = latestProgressByStep[stage.id]?.status === "running"; const failed = latestProgressByStep[stage.id]?.status === "failed"; const skipped = false; return <li key={stage.id} className={item ? "stage-complete" : running ? "stage-running" : failed ? "stage-failed" : ""}><span className="stage-indicator">{item ? <Check size={13}/> : failed ? <X size={13}/> : index + 1}</span><span><strong>{stage.title}</strong><small>{item ? "Perfundoi" : running ? "Ne proces..." : failed ? "Nuk perfundoi" : skipped ? "Kalohet per kete mode" : "Ne pritje"}</small></span></li>; })}</ol><p>Shenjat e perfundimit dalin vetem kur hapi real mbaron. Koha e kaluar nuk paraqitet si perqindje e rreme e punes.</p></div></div>}
         <div className="examples"><span>TRY AN IDEA</span>{examples.map(x => <button key={x} onClick={() => { setPrompt(x); setError(""); }}>{x}<ArrowUp size={12} className="rotate-45"/></button>)}</div>
       </div>
     </section>
 
     {project && <section className="result-wrap" aria-live="polite">
-      <div className="result-heading"><div><div className="section-kicker">YOUR GENERATED PROJECT</div><h2>{project.projectName}</h2><p>{project.summary}</p></div><button className="download-button" onClick={downloadProject}><Download size={16}/> Download project ZIP</button></div>
+      <div className="result-heading"><div><div className="section-kicker">YOUR GENERATED PROJECT</div><h2>{project.projectName}</h2><p>{project.summary}</p></div><div className="result-actions"><button className="download-button" onClick={exportRobloxPlace}><Download size={16}/> Export .rbxlx</button><button className="download-button" onClick={downloadProject}><Download size={16}/> Download project ZIP</button></div></div>
 
       {(project.environmentPlan?.length ?? 0) > 0 && <div className="scene-plan-note"><Globe2 size={16}/> <strong>{project.environmentPlan?.length} 3D objects</strong> are ready for direct construction by the Madara AI Studio Connector.</div>}
       {(project.environmentPlan?.length ?? 0) > 0 && <ScenePlanPreview parts={project.environmentPlan || []} />}
@@ -382,7 +412,7 @@ export default function Home() {
       <p className="publish-note">Madara AI uses separate planning, environment, gameplay and code-review agents. Scripts and map geometry still need testing in Roblox Studio. The ZIP is a Rojo source package, not a compiled Roblox place file.</p>
     </section>}
 
-    <StudioConnectorPanel />\n    <PublishNowPanel />\n\n    <section className="steps" id="how-it-works">
+    <StudioConnectorPanel />\n    <PublishNowPanel generatedPlaceFile={generatedPlaceFile} />\n\n    <section className="steps" id="how-it-works">
       <div className="section-kicker">FROM IDEA TO EXPERIENCE</div><h2>Your AI team starts here.</h2>
       <div className="steps-grid">
         <article className="step-card"><div className="step-icon"><BrainCircuit/></div><span>01 / ARCHITECT</span><h3>Plan the experience</h3><p>The architect defines the game loop, worlds, progression and systems.</p></article>
