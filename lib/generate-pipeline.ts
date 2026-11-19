@@ -44,29 +44,38 @@ function parseJson(content: unknown): JsonObject {
 
 function validFiles(value: unknown, maxFiles: number): GeneratedFile[] {
   if (!Array.isArray(value)) return [];
-  return value.slice(0, maxFiles).filter((file): file is GeneratedFile => {
-    if (!file || typeof file !== "object") return false;
+  return value.slice(0, maxFiles).flatMap((file): GeneratedFile[] => {
+    if (!file || typeof file !== "object") return [];
     const item = file as Record<string, unknown>;
     const path = item.path;
     const code = item.code;
-    if (typeof path !== "string" || typeof code !== "string") return false;
+    if (typeof path !== "string" || typeof code !== "string") return [];
     const segments = path.split("/");
-    const allowedRoots = ["ServerScriptService", "ReplicatedStorage", "ServerStorage", "StarterGui", "StarterPlayer", "Workspace"];
     const validStarterPlayerPath = segments[0] !== "StarterPlayer" || ["StarterPlayerScripts", "StarterCharacterScripts"].includes(segments[1] || "");
-    return path.length < 180 &&
+    const exactRecoveryKind =
+      path === "ServerScriptService/MadaraGenerated/Main.server.lua" ? "server" :
+      path === "StarterPlayer/StarterPlayerScripts/MadaraGenerated/Client.client.lua" ? "client" :
+      path === "ReplicatedStorage/MadaraGenerated/Config.module.lua" ? "module" : null;
+    const inferredKind: GeneratedFile["kind"] | null =
+      segments[0] === "ServerScriptService" ? "server" :
+      segments[0] === "ReplicatedStorage" ? "module" :
+      segments[0] === "StarterGui" || (segments[0] === "StarterPlayer" && ["StarterPlayerScripts", "StarterCharacterScripts"].includes(segments[1] || "")) ? "client" :
+      null;
+    const kind = exactRecoveryKind || (["server", "client", "module"].includes(String(item.kind)) ? item.kind as GeneratedFile["kind"] : inferredKind);
+    if (!kind) return [];
+    const valid = path.length < 180 &&
       segments.length >= 2 &&
       segments.every(segment => segment.length > 0 && segment !== "." && segment !== "..") &&
-      allowedRoots.includes(segments[0]) &&
+      ["ServerScriptService", "ReplicatedStorage", "ServerStorage", "StarterGui", "StarterPlayer", "Workspace"].includes(segments[0]) &&
       validStarterPlayerPath &&
       !path.startsWith("/") &&
       !path.includes(String.fromCharCode(92)) &&
-      !/[<>:"|?*\u0000-\u001f]/.test(path) &&
+      !/[<>:"|?*\\u0000-\\u001f]/.test(path) &&
       code.trim().length > 0 &&
-      code.length < MAX_FILE_LENGTH &&
-      ["server", "client", "module"].includes(String(item.kind));
+      code.length < MAX_FILE_LENGTH;
+    return valid ? [{ path, kind, code }] : [];
   });
 }
-
 function validScenePlan(value: unknown): ScenePart[] {
   if (!Array.isArray(value)) return [];
   const materials = new Set(["SmoothPlastic", "Plastic", "Neon", "Metal", "Wood", "WoodPlanks", "Concrete", "Grass", "Sand", "Brick", "Slate", "Glass", "Ice", "Marble", "Granite", "DiamondPlate", "Fabric", "Foil", "CorrodedMetal", "ForceField", "Asphalt", "Basalt", "Ground", "LeafyGrass", "Limestone", "Mud", "Pavement", "Rock", "Salt", "Sandstone", "Snow", "Water"]);
@@ -551,7 +560,12 @@ export async function runGenerationPipeline(request: Request, stepRunner?: Pipel
             240_000
           ));
           const recoveredFiles = validFiles(recovery.files, 6);
-          files = uniqueByPath([...files, ...recoveredFiles]).slice(0, 16);
+          for (const recoveredFile of recoveredFiles) {
+            const existingIndex = files.findIndex(file => file.path.toLowerCase() === recoveredFile.path.toLowerCase());
+            if (existingIndex >= 0) files[existingIndex] = recoveredFile;
+            else files.push(recoveredFile);
+          }
+          files = uniqueByPath(files).slice(0, 16);
         } catch (repairError) {
           console.warn(`Madara AI package recovery attempt ${repairAttempt} failed:`, repairError);
         }
