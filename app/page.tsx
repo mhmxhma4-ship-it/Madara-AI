@@ -320,14 +320,19 @@ export default function Home() {
   const progressStages = [
     { id: "architect", title: "Game Architect", description: "Analizon idene dhe krijon planin e lojes." },
     { id: "environment", title: "Environment Agent", description: "Nderton planin e hartes dhe objekteve 3D." },
+    { id: "environment-recovery", title: "Map Recovery Agent", description: "Ploteson objektet e hartes qe mungojne." },
     { id: "gameplay", title: "Gameplay Agent", description: "Krijon sistemet, mekanikat dhe skriptet Luau." },
+    { id: "package-recovery", title: "Package Recovery Agent", description: "Ploteson skriptet e detyrueshme qe mungojne." },
     { id: "ui-agent", title: "UI Agent", description: "Nderton nderfaqen mobile dhe kontrollet." },
     { id: "code-review", title: "Code Reviewer", description: "Kontrollon kodin dhe rregullon gabimet e gjetura." }
   ];
   const activeProgress = progress.find(item => item.status === "running");
   const latestProgress = progress.length ? progress[progress.length - 1] : null;
   const latestActivity = [...progress].reverse().find(item => item.activity)?.activity;
-  const visibleProgressStages = progressStages.filter(stage => stage.id !== "ui-agent" || ["Full game", "UI interface"].includes(mode));
+  const visibleProgressStages = progressStages.filter(stage =>
+    (stage.id !== "ui-agent" || ["Full game", "UI interface"].includes(mode)) &&
+    (!["environment-recovery", "package-recovery"].includes(stage.id) || progress.some(item => item.step === stage.id))
+  );
   const completedProgressCount = visibleProgressStages.filter(stage => progress.some(item => item.step === stage.id && item.status === "complete")).length;
   const progressPercent = Math.round((completedProgressCount / visibleProgressStages.length) * 100);
 
