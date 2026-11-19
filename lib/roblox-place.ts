@@ -78,6 +78,25 @@ function safePath(path: string): string[] {
   }
   return parts;
 }
+function uniqueSceneName(parent: Node, requestedName: string): string {
+  const used = new Set(parent.children.map(child => child.name.toLowerCase()));
+  if (!used.has(requestedName.toLowerCase())) return requestedName;
+  let suffix = 2;
+  while (used.has(`${requestedName}_${suffix}`.toLowerCase())) suffix += 1;
+  return `${requestedName}_${suffix}`;
+}
+
+function addSceneFolder(parent: Node, requestedName: string): Node {
+  const existingFolder = parent.children.find(child =>
+    child.className === "Folder" && child.name.toLowerCase() === requestedName.toLowerCase()
+  );
+  if (existingFolder) return existingFolder;
+  const name = uniqueSceneName(parent, requestedName);
+  const folder: Node = { className: "Folder", name, properties: [], children: [] };
+  parent.children.push(folder);
+  return folder;
+}
+
 function addPart(workspace: Node, part: RobloxScenePart): void {
   if (!part || typeof part.name !== "string" || !part.position || !part.size || !part.color) {
     throw new Error("The scene plan contains an incomplete 3D object.");
@@ -88,7 +107,7 @@ function addPart(workspace: Node, part: RobloxScenePart): void {
   }
   if (!/^[A-Za-z0-9 _-]{1,50}$/.test(part.name)) throw new Error("A scene object has an invalid name.");
   let parent = workspace;
-  for (const segment of parentSegments) parent = addChild(parent, "Folder", segment);
+  for (const segment of parentSegments) parent = addSceneFolder(parent, segment);
   const className = part.className === "SpawnLocation" ? "SpawnLocation" : "Part";
   const color = [part.color.r, part.color.g, part.color.b].map(channel => Math.max(0, Math.min(1, channel)));
   const material = MATERIALS[part.material || "Plastic"] ?? MATERIALS.Plastic;
@@ -109,8 +128,11 @@ function addPart(workspace: Node, part: RobloxScenePart): void {
     properties.push(property("float", "Duration", "0"));
     properties.push(property("bool", "Enabled", "true"));
   }
-  const node = addChild(parent, className, part.name);
-  node.properties = properties;
+
+  const existing = parent.children.find(child => child.name.toLowerCase() === part.name.toLowerCase());
+  if (existing && existing.className === className && existing.properties.join("") === properties.join("")) return;
+  const name = existing ? uniqueSceneName(parent, part.name) : part.name;
+  parent.children.push({ className, name, properties, children: [] });
 }
 function addScript(root: Node, file: RobloxGeneratedFile): void {
   const parts = safePath(file.path);
