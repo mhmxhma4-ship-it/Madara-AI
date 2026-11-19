@@ -83,7 +83,7 @@ function addPart(workspace: Node, part: RobloxScenePart): void {
     throw new Error("The scene plan contains an incomplete 3D object.");
   }
   const parentSegments = (part.parentPath || "MadaraAI_World").split("/");
-  if (parentSegments.length > 8 || parentSegments.some(segment => !/^[A-Za-z0-9 _-]{1,50}$/.test(segment))) {
+  if (parentSegments.length > 8 || parentSegments.some(segment => segment === "." || segment === ".." || !/^[A-Za-z0-9 _-]{1,50}$/.test(segment))) {
     throw new Error(`Unsafe scene folder path for "${part.name}".`);
   }
   if (!/^[A-Za-z0-9 _-]{1,50}$/.test(part.name)) throw new Error("A scene object has an invalid name.");
