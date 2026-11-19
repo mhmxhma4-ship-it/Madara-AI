@@ -1,421 +1,612 @@
--- Madara AI Connector
--- Install as a local Studio plugin. Generated Luau is inserted as source; it is never executed by this plugin.
+--!strict
+-- Madara AI Studio Connector
+-- Install as a local Roblox Studio plugin. This plugin sends prompts to the Madara AI web API
+-- and inserts the returned Luau files into the matching Roblox services.
+-- It never asks for or stores a Roblox password, cookie, or Open Cloud API key.
 
 local HttpService = game:GetService("HttpService")
+local ChangeHistoryService = game:GetService("ChangeHistoryService")
 
-local API_URL = "https://madara-ai.vercel.app/api/generate"
-local TOOLBAR_NAME = "Madara AI"
-local WIDGET_ID = "MadaraAIConnectorWidget"
-
-local toolbar = plugin:CreateToolbar(TOOLBAR_NAME)
-local toggleButton = toolbar:CreateButton(
-	"OpenMadaraAI",
-	"Open Madara AI game builder",
-	""
-)
-toggleButton.ClickableWhenViewportHidden = true
+local TOOLBAR = plugin:CreateToolbar("Madara AI")
+local OPEN_BUTTON = TOOLBAR:CreateButton("OpenMadaraAI", "Open the Madara AI game builder", "")
+OPEN_BUTTON.ClickableWhenViewportHidden = true
 
 local widgetInfo = DockWidgetPluginGuiInfo.new(
 	Enum.InitialDockState.Right,
 	false,
-	false,
-	390,
-	560,
-	320,
-	360
+	true,
+	420,
+	600,
+	340,
+	420
 )
 
-local widget = plugin:CreateDockWidgetPluginGuiAsync(WIDGET_ID, widgetInfo)
-widget.Title = "Madara AI Connector"
+local widget = plugin:CreateDockWidgetPluginGuiAsync("MadaraAIStudioConnector", widgetInfo)
+widget.Title = "Madara AI - Roblox Builder"
 
-local root = Instance.new("Frame")
-root.Name = "Root"
-root.Size = UDim2.fromScale(1, 1)
-root.BackgroundColor3 = Color3.fromRGB(18, 20, 29)
-root.BorderSizePixel = 0
-root.Parent = widget
+local COLORS = {
+	background = Color3.fromRGB(15, 17, 25),
+	panel = Color3.fromRGB(25, 29, 41),
+	field = Color3.fromRGB(34, 39, 54),
+	text = Color3.fromRGB(241, 244, 255),
+	muted = Color3.fromRGB(153, 163, 185),
+	accent = Color3.fromRGB(142, 92, 255),
+	green = Color3.fromRGB(68, 205, 145),
+	red = Color3.fromRGB(255, 112, 124),
+}
 
-local padding = Instance.new("UIPadding")
-padding.PaddingTop = UDim.new(0, 14)
-padding.PaddingBottom = UDim.new(0, 14)
-padding.PaddingLeft = UDim.new(0, 14)
-padding.PaddingRight = UDim.new(0, 14)
-padding.Parent = root
-
-local layout = Instance.new("UIListLayout")
-layout.Padding = UDim.new(0, 10)
-layout.SortOrder = Enum.SortOrder.LayoutOrder
-layout.Parent = root
-
-local function makeLabel(name, text, height, order, color, textSize)
-	local label = Instance.new("TextLabel")
-	label.Name = name
-	label.Size = UDim2.new(1, 0, 0, height)
-	label.BackgroundTransparency = 1
-	label.Text = text
-	label.TextColor3 = color or Color3.fromRGB(235, 238, 248)
-	label.Font = Enum.Font.Gotham
-	label.TextSize = textSize or 13
-	label.TextWrapped = true
-	label.TextXAlignment = Enum.TextXAlignment.Left
-	label.TextYAlignment = Enum.TextYAlignment.Center
-	label.LayoutOrder = order
-	label.Parent = root
-	return label
+local function make(className: string, properties: {[string]: any}, parent: Instance): Instance
+	local object = Instance.new(className)
+	for key, value in pairs(properties) do
+		(object :: any)[key] = value
+	end
+	object.Parent = parent
+	return object
 end
 
-local heading = makeLabel("Heading", "MADARA AI  /  ROBLOX STUDIO", 28, 1, Color3.fromRGB(255, 85, 115), 17)
-heading.Font = Enum.Font.GothamBold
+local root = make("Frame", {
+	Name = "Root",
+	Size = UDim2.fromScale(1, 1),
+	BackgroundColor3 = COLORS.background,
+	BorderSizePixel = 0,
+}, widget) :: Frame
 
-makeLabel("Subheading", "Describe your game. Generate Luau. Insert it into Studio.", 34, 2, Color3.fromRGB(174, 181, 199), 12)
+make("UIPadding", {
+	PaddingTop = UDim.new(0, 16),
+	PaddingBottom = UDim.new(0, 16),
+	PaddingLeft = UDim.new(0, 16),
+	PaddingRight = UDim.new(0, 16),
+}, root)
 
-local promptBox = Instance.new("TextBox")
-promptBox.Name = "GamePrompt"
-promptBox.Size = UDim2.new(1, 0, 0, 118)
-promptBox.BackgroundColor3 = Color3.fromRGB(29, 33, 46)
-promptBox.BorderSizePixel = 0
-promptBox.ClearTextOnFocus = false
-promptBox.MultiLine = true
-promptBox.TextWrapped = true
-promptBox.TextXAlignment = Enum.TextXAlignment.Left
-promptBox.TextYAlignment = Enum.TextYAlignment.Top
-promptBox.Font = Enum.Font.Gotham
-promptBox.TextSize = 13
-promptBox.TextColor3 = Color3.fromRGB(245, 246, 250)
-promptBox.PlaceholderColor3 = Color3.fromRGB(130, 138, 158)
-promptBox.PlaceholderText = "Example: Create an anime training simulator with chakra, enemies, rebirths, and 3 worlds..."
-promptBox.Text = ""
-promptBox.LayoutOrder = 3
-promptBox.Parent = root
+make("UIListLayout", {
+	FillDirection = Enum.FillDirection.Vertical,
+	SortOrder = Enum.SortOrder.LayoutOrder,
+	Padding = UDim.new(0, 10),
+}, root)
 
-local modeBox = Instance.new("TextBox")
-modeBox.Name = "CreationMode"
-modeBox.Size = UDim2.new(1, 0, 0, 34)
-modeBox.BackgroundColor3 = Color3.fromRGB(29, 33, 46)
-modeBox.BorderSizePixel = 0
-modeBox.ClearTextOnFocus = false
-modeBox.Font = Enum.Font.Gotham
-modeBox.TextSize = 12
-modeBox.TextColor3 = Color3.fromRGB(245, 246, 250)
-modeBox.Text = "Full game"
-modeBox.PlaceholderText = "Full game / Game map / Gameplay system / UI interface / Lua script"
-modeBox.LayoutOrder = 4
-modeBox.Parent = root
+make("TextLabel", {
+	LayoutOrder = 1,
+	Size = UDim2.new(1, 0, 0, 30),
+	BackgroundTransparency = 1,
+	Text = "MADARA AI",
+	TextColor3 = COLORS.text,
+	TextSize = 22,
+	Font = Enum.Font.GothamBold,
+	TextXAlignment = Enum.TextXAlignment.Left,
+}, root)
 
-local function makeButton(name, text, order, color)
-	local button = Instance.new("TextButton")
-	button.Name = name
-	button.Size = UDim2.new(1, 0, 0, 40)
-	button.BackgroundColor3 = color
-	button.BorderSizePixel = 0
-	button.AutoButtonColor = true
-	button.Font = Enum.Font.GothamBold
-	button.TextSize = 13
-	button.TextColor3 = Color3.fromRGB(255, 255, 255)
-	button.Text = text
-	button.LayoutOrder = order
-	button.Parent = root
-	return button
-end
+make("TextLabel", {
+	LayoutOrder = 2,
+	Size = UDim2.new(1, 0, 0, 34),
+	BackgroundTransparency = 1,
+	Text = "Describe your game. AI agents will plan it, build the world and write Luau scripts.",
+	TextColor3 = COLORS.muted,
+	TextSize = 12,
+	Font = Enum.Font.Gotham,
+	TextWrapped = true,
+	TextXAlignment = Enum.TextXAlignment.Left,
+	TextYAlignment = Enum.TextYAlignment.Top,
+}, root)
 
-local generateButton = makeButton("GenerateButton", "GENERATE WITH MADARA AI", 5, Color3.fromRGB(190, 45, 82))
-local insertButton = makeButton("InsertButton", "INSERT GENERATED SCRIPTS INTO STUDIO", 6, Color3.fromRGB(55, 105, 170))
-insertButton.Visible = false
+local endpoint = make("TextBox", {
+	LayoutOrder = 3,
+	Size = UDim2.new(1, 0, 0, 34),
+	BackgroundColor3 = COLORS.field,
+	BorderSizePixel = 0,
+	Text = "https://madarabot.vercel.app",
+	PlaceholderText = "Madara AI website URL",
+	TextColor3 = COLORS.text,
+	PlaceholderColor3 = COLORS.muted,
+	TextSize = 12,
+	Font = Enum.Font.Gotham,
+	ClearTextOnFocus = false,
+	TextXAlignment = Enum.TextXAlignment.Left,
+}, root) :: TextBox
+make("UICorner", {CornerRadius = UDim.new(0, 8)}, endpoint)
+make("UIPadding", {PaddingLeft = UDim.new(0, 10), PaddingRight = UDim.new(0, 10)}, endpoint)
 
-local statusLabel = makeLabel("Status", "Ready. Enter a game idea to begin.", 42, 7, Color3.fromRGB(170, 210, 185), 12)
-statusLabel.TextYAlignment = Enum.TextYAlignment.Top
+local mode = "Full game"
+local modeButton = make("TextButton", {
+	LayoutOrder = 4,
+	Size = UDim2.new(1, 0, 0, 34),
+	BackgroundColor3 = COLORS.panel,
+	BorderSizePixel = 0,
+	Text = "Mode: Full game  (tap to change)",
+	TextColor3 = COLORS.text,
+	TextSize = 12,
+	Font = Enum.Font.GothamSemibold,
+	AutoButtonColor = true,
+}, root) :: TextButton
+make("UICorner", {CornerRadius = UDim.new(0, 8)}, modeButton)
 
-local resultScroll = Instance.new("ScrollingFrame")
-resultScroll.Name = "GeneratedFiles"
-resultScroll.Size = UDim2.new(1, 0, 1, -330)
-resultScroll.BackgroundColor3 = Color3.fromRGB(23, 26, 37)
-resultScroll.BorderSizePixel = 0
-resultScroll.ScrollBarThickness = 6
-resultScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
-resultScroll.LayoutOrder = 8
-resultScroll.Parent = root
-
-local resultPadding = Instance.new("UIPadding")
-resultPadding.PaddingTop = UDim.new(0, 8)
-resultPadding.PaddingBottom = UDim.new(0, 8)
-resultPadding.PaddingLeft = UDim.new(0, 8)
-resultPadding.PaddingRight = UDim.new(0, 8)
-resultPadding.Parent = resultScroll
-
-local resultLayout = Instance.new("UIListLayout")
-resultLayout.Padding = UDim.new(0, 7)
-resultLayout.SortOrder = Enum.SortOrder.LayoutOrder
-resultLayout.Parent = resultScroll
-
-resultLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-	resultScroll.CanvasSize = UDim2.new(0, 0, 0, resultLayout.AbsoluteContentSize.Y + 16)
+local modes = {"Full game", "Game map", "Gameplay system", "UI interface", "Lua script"}
+local modeIndex = 1
+modeButton.Activated:Connect(function()
+	modeIndex = (modeIndex % #modes) + 1
+	mode = modes[modeIndex]
+	modeButton.Text = "Mode: " .. mode .. "  (tap to change)"
 end)
 
-local latestFiles = nil
-local latestProjectName = "MadaraAI_Project"
+local prompt = make("TextBox", {
+	LayoutOrder = 5,
+	Size = UDim2.new(1, 0, 0, 150),
+	BackgroundColor3 = COLORS.field,
+	BorderSizePixel = 0,
+	Text = "",
+	PlaceholderText = "Example: Create an anime simulator with 5 worlds, followers, quests, boss fights, upgrades and rebirths...",
+	TextColor3 = COLORS.text,
+	PlaceholderColor3 = COLORS.muted,
+	TextSize = 13,
+	Font = Enum.Font.Gotham,
+	ClearTextOnFocus = false,
+	MultiLine = true,
+	TextWrapped = true,
+	TextXAlignment = Enum.TextXAlignment.Left,
+	TextYAlignment = Enum.TextYAlignment.Top,
+}, root) :: TextBox
+make("UICorner", {CornerRadius = UDim.new(0, 8)}, prompt)
+make("UIPadding", {
+	PaddingTop = UDim.new(0, 10),
+	PaddingBottom = UDim.new(0, 10),
+	PaddingLeft = UDim.new(0, 10),
+	PaddingRight = UDim.new(0, 10),
+}, prompt)
+
+local generateButton = make("TextButton", {
+	LayoutOrder = 6,
+	Size = UDim2.new(1, 0, 0, 42),
+	BackgroundColor3 = COLORS.accent,
+	BorderSizePixel = 0,
+	Text = "Generate with AI agents",
+	TextColor3 = COLORS.text,
+	TextSize = 14,
+	Font = Enum.Font.GothamBold,
+}, root) :: TextButton
+make("UICorner", {CornerRadius = UDim.new(0, 9)}, generateButton)
+
+local insertButton = make("TextButton", {
+	LayoutOrder = 7,
+	Size = UDim2.new(1, 0, 0, 42),
+	BackgroundColor3 = COLORS.green,
+	BorderSizePixel = 0,
+	Text = "Insert generated scripts into Studio",
+	TextColor3 = Color3.fromRGB(12, 24, 21),
+	TextSize = 13,
+	Font = Enum.Font.GothamBold,
+	Visible = false,
+}, root) :: TextButton
+make("UICorner", {CornerRadius = UDim.new(0, 9)}, insertButton)
+
+local status = make("TextLabel", {
+	LayoutOrder = 8,
+	Size = UDim2.new(1, 0, 0, 72),
+	BackgroundColor3 = COLORS.panel,
+	BorderSizePixel = 0,
+	Text = "Ready. Enter a game idea and generate your project.",
+	TextColor3 = COLORS.muted,
+	TextSize = 12,
+	Font = Enum.Font.Gotham,
+	TextWrapped = true,
+	TextXAlignment = Enum.TextXAlignment.Left,
+	TextYAlignment = Enum.TextYAlignment.Top,
+}, root) :: TextLabel
+make("UICorner", {CornerRadius = UDim.new(0, 8)}, status)
+make("UIPadding", {
+	PaddingTop = UDim.new(0, 9),
+	PaddingBottom = UDim.new(0, 8),
+	PaddingLeft = UDim.new(0, 9),
+	PaddingRight = UDim.new(0, 9),
+}, status)
+
+make("TextLabel", {
+	LayoutOrder = 9,
+	Size = UDim2.new(1, 0, 0, 42),
+	BackgroundTransparency = 1,
+	Text = "Review generated code before running it. Inserting a file with the same path updates that script. Test in Studio before publishing.",
+	TextColor3 = COLORS.muted,
+	TextSize = 10,
+	Font = Enum.Font.Gotham,
+	TextWrapped = true,
+	TextXAlignment = Enum.TextXAlignment.Left,
+}, root)
+
+local generatedProject: any = nil
 local busy = false
+local pendingInsertConfirmation = false
 
-local function setStatus(message, isError)
-	statusLabel.Text = message
-	statusLabel.TextColor3 = isError and Color3.fromRGB(255, 130, 140) or Color3.fromRGB(170, 210, 185)
+local function setStatus(message: string, color: Color3?)
+	status.Text = message
+	status.TextColor3 = color or COLORS.muted
 end
 
-local function clearResults()
-	for _, child in ipairs(resultScroll:GetChildren()) do
-		if child:IsA("TextLabel") then
-			child:Destroy()
+local function normalizedBaseUrl(): string?
+	local value = string.gsub(endpoint.Text, "%s+", "")
+	value = string.gsub(value, "/+$", "")
+	if not string.match(value, "^https://[%w%.%-]+") then
+		return nil
+	end
+	return value
+end
+
+generateButton.Activated:Connect(function()
+	if busy then return end
+	local gamePrompt = string.gsub(prompt.Text, "^%s*(.-)%s*$", "%1")
+	if #gamePrompt < 5 then
+		setStatus("Describe your game idea first.", COLORS.red)
+		return
+	end
+	if #gamePrompt > 5000 then
+		setStatus("Your game idea is too long. Maximum 5000 characters.", COLORS.red)
+		return
+	end
+
+	local baseUrl = normalizedBaseUrl()
+	if not baseUrl then
+		setStatus("Enter a valid HTTPS website URL.", COLORS.red)
+		return
+	end
+
+	busy = true
+	generateButton.Text = "AI agents are working..."
+	generateButton.Active = false
+	insertButton.Visible = false
+	generatedProject = nil
+	pendingInsertConfirmation = false
+
+	task.spawn(function()
+		local function finish(message: string, color: Color3?)
+			setStatus(message, color)
+			busy = false
+			generateButton.Text = "Generate with AI agents"
+			generateButton.Active = true
 		end
-	end
-end
 
-local function addFileCard(file)
-	local card = Instance.new("TextLabel")
-	card.Name = "File_" .. tostring(file.path)
-	card.Size = UDim2.new(1, -4, 0, 48)
-	card.BackgroundColor3 = Color3.fromRGB(34, 39, 54)
-	card.BorderSizePixel = 0
-	card.Font = Enum.Font.Code
-	card.TextSize = 11
-	card.TextColor3 = Color3.fromRGB(225, 230, 242)
-	card.TextWrapped = true
-	card.TextXAlignment = Enum.TextXAlignment.Left
-	card.TextYAlignment = Enum.TextYAlignment.Center
-	card.Text = "  " .. tostring(file.kind) .. "  |  " .. tostring(file.path)
-	card.Parent = resultScroll
-end
+		local requestOk, startResponse = pcall(function()
+			return HttpService:RequestAsync({
+				Url = baseUrl .. "/api/generate",
+				Method = "POST",
+				Headers = {["Content-Type"] = "application/json"},
+				Body = HttpService:JSONEncode({ prompt = gamePrompt, mode = mode }),
+			})
+		end)
+		if not requestOk then
+			finish("Connection failed. Check the URL and allow HTTP requests. Details: " .. tostring(startResponse), COLORS.red)
+			return
+		end
 
-local function safeName(value)
-	local name = tostring(value or "GeneratedScript")
-	name = name:gsub("%.server%.lua$", ""):gsub("%.client%.lua$", ""):gsub("%.lua$", "")
-	name = name:gsub("[^%w_%- ]", ""):gsub("^%s+", ""):gsub("%s+$", "")
-	if name == "" then
-		name = "GeneratedScript"
-	end
-	return name
-end
+		local startDecodedOk, startData = pcall(function()
+			return HttpService:JSONDecode(startResponse.Body)
+		end)
+		if not startDecodedOk or type(startData) ~= "table" then
+			finish("Madara AI returned an unreadable queue response (HTTP " .. tostring(startResponse.StatusCode) .. ").", COLORS.red)
+			return
+		end
+		if not startResponse.Success then
+			finish(type(startData.error) == "string" and startData.error or ("Madara AI returned HTTP " .. tostring(startResponse.StatusCode)), COLORS.red)
+			return
+		end
 
-local function getServiceAndRelativePath(path, kind)
-	local clean = tostring(path or ""):gsub("\\", "/")
-	local segments = {}
-	for segment in string.gmatch(clean, "[^/]+") do
-		table.insert(segments, segment)
-	end
+		local completedProject: any = nil
+		if startData.status == "COMPLETED" and type(startData.project) == "table" then
+			completedProject = startData.project
+		elseif type(startData.runId) == "string" and #startData.runId >= 10 then
+			local runId = startData.runId
+			local deadline = os.clock() + 115 * 60
+			local consecutiveErrors = 0
+			setStatus("Generation queued. Waiting for the AI agents to start...", COLORS.muted)
 
-	local serviceNames = {
-		ServerScriptService = true,
-		ReplicatedStorage = true,
-		StarterPlayer = true,
-		StarterGui = true,
-		Workspace = true,
-		Lighting = true,
-		ServerStorage = true,
-	}
+			while os.clock() < deadline do
+				task.wait(4)
+				local pollOk, pollResponse = pcall(function()
+					return HttpService:RequestAsync({
+						Url = baseUrl .. "/api/generate?runId=" .. HttpService:UrlEncode(runId),
+						Method = "GET",
+						Headers = {["Cache-Control"] = "no-cache"},
+					})
+				end)
 
-	local serviceName = nil
-	if #segments > 1 and serviceNames[segments[1]] then
-		serviceName = table.remove(segments, 1)
-	end
+				if not pollOk then
+					consecutiveErrors += 1
+					if consecutiveErrors >= 8 then
+						finish("Could not reach the generation status service after repeated retries. Your queued run may still be active; reopen the plugin and retry after checking Inngest.", COLORS.red)
+						return
+					end
+				else
+					local pollDecodedOk, pollData = pcall(function()
+						return HttpService:JSONDecode(pollResponse.Body)
+					end)
+					if not pollDecodedOk or type(pollData) ~= "table" then
+						consecutiveErrors += 1
+						if consecutiveErrors >= 8 then
+							finish("The generation status service returned unreadable responses repeatedly. Check Inngest Runs before retrying.", COLORS.red)
+							return
+						end
+					elseif not pollResponse.Success then
+						consecutiveErrors += 1
+						local message = type(pollData.error) == "string" and pollData.error or ("Status API returned HTTP " .. tostring(pollResponse.StatusCode))
+						if pollResponse.StatusCode < 500 or consecutiveErrors >= 8 then
+							finish(message, COLORS.red)
+							return
+						end
+					else
+						consecutiveErrors = 0
+						local currentActivity = nil
+						if type(pollData.progress) == "table" then
+							for _, item in ipairs(pollData.progress) do
+								if type(item) == "table" and item.status == "running" then
+									currentActivity = type(item.activity) == "string" and item.activity or ("Working on " .. tostring(item.step) .. "...")
+								end
+							end
+						end
+						if currentActivity then
+							setStatus("AI generation is running:\n" .. currentActivity, COLORS.muted)
+						elseif pollData.status == "QUEUED" then
+							setStatus("Your project is queued. Waiting for an available AI worker...", COLORS.muted)
+						end
 
-	if not serviceName then
-		if kind == "client" then
-			serviceName = "StarterPlayer"
-		elseif kind == "module" then
-			serviceName = "ReplicatedStorage"
+						if pollData.status == "COMPLETED" and type(pollData.project) == "table" then
+							completedProject = pollData.project
+							break
+						elseif pollData.status == "FAILED" then
+							finish(type(pollData.error) == "string" and pollData.error or "AI generation failed. Check Inngest Runs for details.", COLORS.red)
+							return
+						end
+					end
+				end
+			end
+			if not completedProject then
+				finish("Generation is still running or exceeded the 115-minute wait. Check Inngest Runs before starting another request.", COLORS.red)
+				return
+			end
 		else
-			serviceName = "ServerScriptService"
+			finish(type(startData.error) == "string" and startData.error or "Madara AI did not return a valid Inngest run ID.", COLORS.red)
+			return
+		end
+
+		if type(completedProject.files) ~= "table" or type(completedProject.environmentPlan) ~= "table" then
+			finish("Madara AI completed but returned an invalid project package. No scripts or map were inserted.", COLORS.red)
+			return
+		end
+		if #completedProject.files == 0 and #completedProject.environmentPlan == 0 then
+			finish("Madara AI completed without usable scripts or map objects. Nothing was inserted.", COLORS.red)
+			return
+		end
+
+		generatedProject = completedProject
+		pendingInsertConfirmation = false
+		local warningCount = 0
+		if type(completedProject.agents) == "table" then
+			for _, agent in ipairs(completedProject.agents) do
+				if type(agent) == "table" and agent.status == "warning" then warningCount += 1 end
+			end
+		end
+		local sceneCount = #completedProject.environmentPlan
+		local fileCount = #completedProject.files
+		setStatus(
+			"Project ready: " .. tostring(completedProject.projectName or "Roblox Game")
+				.. "\n" .. tostring(fileCount) .. " scripts + " .. tostring(sceneCount) .. " 3D objects."
+				.. (warningCount > 0 and (" Review warnings: " .. tostring(warningCount) .. ".") or "")
+				.. "\nReview the project, then tap Insert.",
+			warningCount > 0 and Color3.fromRGB(255, 190, 90) or COLORS.green
+		)
+		insertButton.Visible = true
+		busy = false
+		generateButton.Text = "Generate again"
+		generateButton.Active = true
+	end)
+end)
+
+local allowedServices: {[string]: boolean} = {
+	ServerScriptService = true,
+	ReplicatedStorage = true,
+	ServerStorage = true,
+	StarterGui = true,
+	StarterPlayer = true,
+	Workspace = true,
+}
+
+local function safeSegments(path: string): {string}?
+	if #path > 180 or string.find(path, "..", 1, true) or string.find(path, "\\", 1, true) then
+		return nil
+	end
+	local segments = string.split(path, "/")
+	if #segments < 2 or not allowedServices[segments[1]] then
+		return nil
+	end
+	for _, segment in ipairs(segments) do
+		if segment == "" or string.find(segment, "[<>:\"|%?%*]") then
+			return nil
 		end
 	end
-
-	if #segments == 0 then
-		table.insert(segments, "GeneratedScript.lua")
-	end
-
-	return serviceName, segments
+	return segments
 end
 
-local function uniqueFolder(parent, baseName)
-	local name = safeName(baseName)
-	local candidate = name
-	local suffix = 2
-	while parent:FindFirstChild(candidate) do
-		candidate = name .. "_" .. suffix
-		suffix += 1
+local function insertFile(file: any): (boolean, string)
+	if type(file) ~= "table" or type(file.path) ~= "string" or type(file.code) ~= "string" then
+		return false, "Invalid file entry."
 	end
-	local folder = Instance.new("Folder")
-	folder.Name = candidate
-	folder.Parent = parent
-	return folder
-end
-
-local function createGeneratedScript(file, projectFolderName)
-	if type(file) ~= "table" or type(file.code) ~= "string" or type(file.path) ~= "string" then
-		return false, "Invalid generated file"
+	local segments = safeSegments(file.path)
+	if not segments then
+		return false, "Blocked unsafe or unsupported path: " .. file.path
 	end
-	if file.kind == "readme" then
-		return false, "readme"
+	if #file.code > 60000 then
+		return false, "File is too large: " .. file.path
 	end
 
-	local serviceName, segments = getServiceAndRelativePath(file.path, file.kind)
-	local service = game:GetService(serviceName)
-	local projectFolder = service:FindFirstChild(projectFolderName)
-	if not projectFolder then
-		projectFolder = Instance.new("Folder")
-		projectFolder.Name = projectFolderName
-		projectFolder.Parent = service
-	end
-
-	for index = 1, #segments - 1 do
-		local folderName = safeName(segments[index])
-		local folder = projectFolder:FindFirstChild(folderName)
-		if not folder then
-			folder = Instance.new("Folder")
+	local parent: Instance = game:GetService(segments[1])
+	for index = 2, #segments - 1 do
+		local folderName = segments[index]
+		local child = parent:FindFirstChild(folderName)
+		if child and child:IsA("LuaSourceContainer") then
+			return false, "A script already exists where a folder is required: " .. folderName
+		end
+		if not child then
+			local folder = Instance.new("Folder")
 			folder.Name = folderName
-			folder.Parent = projectFolder
+			folder.Parent = parent
+			child = folder
 		end
-		projectFolder = folder
+		parent = child
 	end
 
 	local fileName = segments[#segments]
-	local className = "Script"
-	if file.kind == "client" or fileName:match("%.client%.lua$") then
+	local className: string
+	if file.kind == "server" then
+		className = "Script"
+	elseif file.kind == "client" then
 		className = "LocalScript"
 	elseif file.kind == "module" then
 		className = "ModuleScript"
+	else
+		return false, "Unsupported script type for " .. file.path
 	end
 
-	local scriptName = safeName(fileName)
-	local scriptObject = Instance.new(className)
-	scriptObject.Name = scriptName
-	local ok, err = pcall(function()
+	local existing = parent:FindFirstChild(fileName)
+	local scriptObject: LuaSourceContainer
+	if existing then
+		if not existing:IsA(className) then
+			return false, "A different object type already exists at " .. file.path
+		end
+		scriptObject = existing :: LuaSourceContainer
+	else
+		scriptObject = Instance.new(className) :: LuaSourceContainer
+		scriptObject.Name = fileName
+		scriptObject.Parent = parent
+	end
+
+	local sourceOk, sourceError = pcall(function()
 		scriptObject.Source = file.code
 	end)
-	if not ok then
-		scriptObject:Destroy()
-		return false, "Could not write script source: " .. tostring(err)
+	if not sourceOk then
+		return false, "Could not write source for " .. file.path .. ": " .. tostring(sourceError)
 	end
-	scriptObject.Parent = projectFolder
-	return true
+	return true, file.path
 end
 
-local function generate()
-	if busy then
+local function insertScenePart(part: any): (boolean, string)
+	if type(part) ~= "table" or type(part.name) ~= "string" then return false, "Invalid 3D object entry." end
+	local parentPath = type(part.parentPath) == "string" and part.parentPath or "World"
+	if #parentPath > 120 or string.find(parentPath, "..", 1, true) or string.find(parentPath, "\\", 1, true) then return false, "Blocked unsafe scene folder path." end
+	local parent: Instance = workspace:FindFirstChild("MadaraAI_Generated") or workspace
+	for _, segment in ipairs(string.split(parentPath, "/")) do
+		if segment == "" or segment == "." or string.find(segment, "[<>:\"|%?%*]") then return false, "Invalid scene folder name." end
+		local folder = parent:FindFirstChild(segment)
+		if folder and not folder:IsA("Folder") and not folder:IsA("Model") then return false, "A non-container object blocks the scene folder path: " .. segment end
+		if not folder then
+			local created = Instance.new("Folder")
+			created.Name = segment
+			created.Parent = parent
+			folder = created
+		end
+		parent = folder
+	end
+	local className = part.className
+	if className ~= "Part" and className ~= "SpawnLocation" then return false, "Unsupported 3D object type." end
+	local position, size, color = part.position, part.size, part.color
+	local rotation = part.rotation or {x = 0, y = 0, z = 0}
+	local function validVector(value: any, minimum: number, maximum: number): boolean
+		return type(value) == "table" and type(value.x) == "number" and type(value.y) == "number" and type(value.z) == "number"
+			and value.x == value.x and value.y == value.y and value.z == value.z
+			and math.abs(value.x) <= maximum and math.abs(value.y) <= maximum and math.abs(value.z) <= maximum
+			and (minimum <= 0 or (value.x >= minimum and value.y >= minimum and value.z >= minimum))
+	end
+	if not validVector(position, -10000, 10000) or not validVector(size, 0.2, 512) or not validVector(rotation, -360, 360) then return false, "Invalid position, size or rotation for " .. part.name end
+	if type(color) ~= "table" or type(color.r) ~= "number" or type(color.g) ~= "number" or type(color.b) ~= "number" then return false, "Invalid color for " .. part.name end
+	local existing = parent:FindFirstChild(part.name)
+	local object: BasePart
+	if existing then
+		if not existing:IsA(className) then return false, "A different object already exists at " .. part.name end
+		object = existing :: BasePart
+	else
+		object = Instance.new(className) :: BasePart
+		object.Name = part.name
+		object.Parent = parent
+	end
+	object.Size = Vector3.new(math.clamp(size.x, 0.2, 512), math.clamp(size.y, 0.2, 512), math.clamp(size.z, 0.2, 512))
+	object.CFrame = CFrame.new(position.x, position.y, position.z) * CFrame.Angles(math.rad(rotation.x), math.rad(rotation.y), math.rad(rotation.z))
+	object.Color = Color3.new(math.clamp(color.r, 0, 1), math.clamp(color.g, 0, 1), math.clamp(color.b, 0, 1))
+	local material = type(part.material) == "string" and Enum.Material[part.material] or nil
+	object.Material = material or Enum.Material.SmoothPlastic
+	if object:IsA("Part") then
+		local shape = type(part.shape) == "string" and Enum.PartType[part.shape] or nil
+		object.Shape = shape or Enum.PartType.Block
+	end
+	object.Anchored = part.anchored ~= false
+	object.CanCollide = part.canCollide ~= false
+	object.Transparency = type(part.transparency) == "number" and math.clamp(part.transparency, 0, 1) or 0
+	if object:IsA("SpawnLocation") then
+		object.Neutral = true
+		object.Duration = 0
+	end
+	return true, parentPath .. "/" .. part.name
+end
+
+insertButton.Activated:Connect(function()
+	if busy or type(generatedProject) ~= "table" or type(generatedProject.files) ~= "table" then
 		return
 	end
-	local prompt = promptBox.Text:gsub("^%s+", ""):gsub("%s+$", "")
-	local mode = modeBox.Text:gsub("^%s+", ""):gsub("%s+$", "")
-	if prompt == "" then
-		setStatus("Write your game idea first.", true)
+	if not pendingInsertConfirmation then
+		pendingInsertConfirmation = true
+		setStatus("Confirm insert: matching scripts will update and the MadaraAI_Generated map folder will be replaced. Press Insert again to continue.", Color3.fromRGB(255, 190, 90))
 		return
 	end
-	if #prompt > 5000 then
-		setStatus("Your idea is too long. Maximum 5000 characters.", true)
-		return
-	end
+	pendingInsertConfirmation = false
 
 	busy = true
-	generateButton.Text = "GENERATING..."
-	generateButton.Active = false
-	insertButton.Visible = false
-	latestFiles = nil
-	clearResults()
-	setStatus("Connecting to Madara AI agents. This can take a little while...", false)
-
-	local ok, response = pcall(function()
-		return HttpService:RequestAsync({
-			Url = API_URL,
-			Method = "POST",
-			Headers = { ["Content-Type"] = "application/json" },
-			Body = HttpService:JSONEncode({
-				prompt = prompt,
-				mode = mode,
-			}),
-			Timeout = 55,
-		})
-	end)
-
-	if not ok then
-		setStatus("Connection failed: " .. tostring(response) .. ". Check the plugin's web permission and try again.", true)
-	elseif not response.Success then
-		local message = "Madara AI returned HTTP " .. tostring(response.StatusCode)
-		local decodedOk, decoded = pcall(function()
-			return HttpService:JSONDecode(response.Body)
-		end)
-		if decodedOk and type(decoded) == "table" and type(decoded.error) == "string" then
-			message = decoded.error
-		end
-		setStatus(message, true)
-	else
-		local decodedOk, data = pcall(function()
-			return HttpService:JSONDecode(response.Body)
-		end)
-		if not decodedOk or type(data) ~= "table" then
-			setStatus("Madara AI returned an unreadable response.", true)
-		elseif type(data.files) ~= "table" then
-			setStatus("The response did not contain any project files.", true)
+	local recordingId = ChangeHistoryService:TryBeginRecording("MadaraAIInsert", "Insert generated Madara AI scripts")
+	if not recordingId then
+		busy = false
+		setStatus("Studio could not start an undo recording. No scripts were inserted. Try again.", COLORS.red)
+		return
+	end
+	local inserted = 0
+	local objectsInserted = 0
+	local failures = {}
+	for _, file in ipairs(generatedProject.files) do
+		local callOk, ok, message = pcall(insertFile, file)
+		if callOk and ok then
+			inserted += 1
 		else
-			latestFiles = data.files
-			latestProjectName = safeName(data.projectName or "MadaraAI_Project")
-			local validCount = 0
-			for _, file in ipairs(latestFiles) do
-				if type(file) == "table" and type(file.code) == "string" and type(file.path) == "string" and file.kind ~= "readme" then
-					validCount += 1
-					addFileCard(file)
+			table.insert(failures, callOk and message or tostring(ok))
+		end
+	end
+	if type(generatedProject.environmentPlan) == "table" and #generatedProject.environmentPlan > 0 then
+		local previousMap = workspace:FindFirstChild("MadaraAI_Generated")
+		local canBuildScene = true
+		if previousMap and not previousMap:IsA("Folder") then
+			table.insert(failures, "Workspace.MadaraAI_Generated exists but is not a Folder.")
+			canBuildScene = false
+		else
+			if previousMap then previousMap:Destroy() end
+			local newMap = Instance.new("Folder")
+			newMap.Name = "MadaraAI_Generated"
+			newMap.Parent = workspace
+		end
+		if canBuildScene then
+			for _, part in ipairs(generatedProject.environmentPlan) do
+				local callOk, ok, message = pcall(insertScenePart, part)
+				if callOk and ok then
+					objectsInserted += 1
+				else
+					table.insert(failures, callOk and message or tostring(ok))
 				end
 			end
-			setStatus("Generated " .. validCount .. " script(s). Review the file list, then insert them into your place.", false)
-			insertButton.Visible = validCount > 0
 		end
 	end
 
-	busy = false
-	generateButton.Text = "GENERATE WITH MADARA AI"
-	generateButton.Active = true
-end
-
-local function insertScripts()
-	if busy or type(latestFiles) ~= "table" then
-		return
+	if recordingId then
+		ChangeHistoryService:FinishRecording(recordingId, Enum.FinishRecordingOperation.Commit)
 	end
-	busy = true
-	insertButton.Text = "INSERTING..."
-	insertButton.Active = false
-
-	local folderName = latestProjectName .. "_" .. os.date("%H%M%S")
-	local inserted = 0
-	local skipped = 0
-	local failures = {}
-
-	for _, file in ipairs(latestFiles) do
-		local ok, result = pcall(createGeneratedScript, file, folderName)
-		if ok and result == true then
-			inserted += 1
-		elseif not ok then
-			table.insert(failures, tostring(result))
-		else
-			skipped += 1
-		end
-	end
-
-	if #failures > 0 then
-		setStatus("Inserted " .. inserted .. " script(s); " .. #failures .. " failed. First error: " .. failures[1], true)
+	if #failures == 0 then
+		setStatus("Inserted " .. tostring(inserted) .. " scripts and built " .. tostring(objectsInserted) .. " 3D objects. You can Undo this insertion. Press Play and test the game; save a backup before publishing.", COLORS.green)
 	else
-		setStatus("Inserted " .. inserted .. " script(s) into Studio. Read each script before testing or publishing.", false)
+		setStatus("Inserted " .. tostring(inserted) .. " scripts and " .. tostring(objectsInserted) .. " objects; " .. tostring(#failures) .. " failed:\n" .. table.concat(failures, "\n"), COLORS.red)
 	end
-	if skipped > 0 then
-		setStatus(statusLabel.Text .. " Skipped " .. skipped .. " readme/unsupported file(s).", false)
-	end
-
 	busy = false
-	insertButton.Text = "INSERT GENERATED SCRIPTS INTO STUDIO"
-	insertButton.Active = true
-end
+end)
 
-generateButton.Activated:Connect(generate)
-insertButton.Activated:Connect(insertScripts)
-toggleButton.Click:Connect(function()
+OPEN_BUTTON.Click:Connect(function()
 	widget.Enabled = not widget.Enabled
 end)
 
-plugin.Unloading:Connect(function()
-	widget:Destroy()
-end)
+widget.Enabled = true
