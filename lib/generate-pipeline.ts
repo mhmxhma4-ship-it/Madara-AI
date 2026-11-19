@@ -28,18 +28,35 @@ const safeError = (status: number) => {
 };
 
 function parseJson(content: unknown): JsonObject {
-  if (typeof content !== "string" || !content.trim()) {
-    throw new Error("An AI agent returned an empty response.");
-  }
+  if (typeof content !== "string" || !content.trim()) throw new Error("An AI agent returned an empty response.");
   const cleaned = content.trim().replace(/^`{3}(?:json)?\s*/i, "").replace(/\s*`{3}$/i, "");
+  const candidates = [cleaned];
   const start = cleaned.indexOf("{");
-  const end = cleaned.lastIndexOf("}");
-  if (start < 0 || end <= start) throw new Error("An AI agent returned invalid JSON. Please generate again.");
-  try {
-    return JSON.parse(cleaned.slice(start, end + 1)) as JsonObject;
-  } catch {
-    throw new Error("An AI agent returned malformed JSON. Please generate again.");
+  if (start >= 0) {
+    let depth = 0, inString = false, escaped = false;
+    for (let i = start; i < cleaned.length; i++) {
+      const char = cleaned[i];
+      if (inString) {
+        if (escaped) escaped = false;
+        else if (char === "\\") escaped = true;
+        else if (char === '"') inString = false;
+      } else if (char === '"') inString = true;
+      else if (char === "{") depth++;
+      else if (char === "}" && --depth === 0) {
+        candidates.push(cleaned.slice(start, i + 1));
+        break;
+      }
+    }
+    const end = cleaned.lastIndexOf("}");
+    if (end > start) candidates.push(cleaned.slice(start, end + 1));
   }
+  for (const candidate of candidates) {
+    try {
+      const value: unknown = JSON.parse(candidate);
+      if (value && typeof value === "object" && !Array.isArray(value)) return value as JsonObject;
+    } catch { /* try the next candidate */ }
+  }
+  throw new Error("An AI agent returned malformed JSON. Please generate again.");
 }
 
 function validFiles(value: unknown, maxFiles: number): GeneratedFile[] {
@@ -47,9 +64,10 @@ function validFiles(value: unknown, maxFiles: number): GeneratedFile[] {
   return value.slice(0, maxFiles).flatMap((file): GeneratedFile[] => {
     if (!file || typeof file !== "object") return [];
     const item = file as Record<string, unknown>;
-    const path = item.path;
+    const rawPath = item.path;
     const code = item.code;
-    if (typeof path !== "string" || typeof code !== "string") return [];
+    if (typeof rawPath !== "string" || typeof code !== "string") return [];
+    const path = rawPath.trim().replace(/\\/g, "/").replace(/\/+/g, "/").replace(/^\/+|\/+$/g, "");
     const segments = path.split("/");
     const validStarterPlayerPath = segments[0] !== "StarterPlayer" || ["StarterPlayerScripts", "StarterCharacterScripts"].includes(segments[1] || "");
     const exactRecoveryKind =
@@ -584,6 +602,62 @@ export async function runGenerationPipeline(request: Request, stepRunner?: Pipel
       interfaceAgentError = "UI generation was skipped to preserve the core game package within the task time limit.";
     }
 
+    // If a provider's UI JSON is malformed, retain a working starter HUD.
+    if ((mode === "Full game" || mode === "UI interface") && validFiles(interfaceAgent.files, 3).length === 0) {
+      interfaceAgent = {
+        ...interfaceAgent,
+        files: [{
+          path: "StarterPlayer/StarterPlayerScripts/MadaraGenerated/FallbackHUD.client.lua",
+          kind: "client",
+          code: `local Players = game:GetService("Players")
+local playerGui = Players.LocalPlayer:WaitForChild("PlayerGui")
+local previous = playerGui:FindFirstChild("MadaraFallbackHUD")
+if previous then previous:Destroy() end
+local gui = Instance.new("ScreenGui")
+gui.Name = "MadaraFallbackHUD"
+gui.ResetOnSpawn = false
+gui.Parent = playerGui
+local panel = Instance.new("Frame")
+panel.Name = "Panel"
+panel.Position = UDim2.fromOffset(16, 16)
+panel.Size = UDim2.new(0, 250, 0, 78)
+panel.BackgroundColor3 = Color3.fromRGB(20, 24, 36)
+panel.BackgroundTransparency = 0.08
+panel.BorderSizePixel = 0
+panel.Parent = gui
+local corner = Instance.new("UICorner")
+corner.CornerRadius = UDim.new(0, 12)
+corner.Parent = panel
+local stroke = Instance.new("UIStroke")
+stroke.Color = Color3.fromRGB(115, 92, 220)
+stroke.Thickness = 1.5
+stroke.Parent = panel
+local title = Instance.new("TextLabel")
+title.BackgroundTransparency = 1
+title.Position = UDim2.fromOffset(14, 10)
+title.Size = UDim2.new(1, -28, 0, 24)
+title.Font = Enum.Font.GothamBold
+title.Text = "MADARA ADVENTURE"
+title.TextColor3 = Color3.fromRGB(245, 245, 255)
+title.TextSize = 15
+title.TextXAlignment = Enum.TextXAlignment.Left
+title.Parent = panel
+local subtitle = Instance.new("TextLabel")
+subtitle.BackgroundTransparency = 1
+subtitle.Position = UDim2.fromOffset(14, 39)
+subtitle.Size = UDim2.new(1, -28, 0, 22)
+subtitle.Font = Enum.Font.Gotham
+subtitle.Text = "Your adventure starts here"
+subtitle.TextColor3 = Color3.fromRGB(180, 190, 215)
+subtitle.TextSize = 12
+subtitle.TextXAlignment = Enum.TextXAlignment.Left
+subtitle.Parent = panel
+`
+        }]
+      };
+      interfaceAgentError = interfaceAgentError || "AI UI output was unavailable; a starter HUD was added automatically.";
+    }
+
     const environmentFiles = validFiles(environment.files, 4);
     const gameplayFiles = validFiles(gameplay.files, 8);
     const interfaceFiles = validFiles(interfaceAgent.files, 3);
@@ -724,6 +798,9 @@ export async function runGenerationPipeline(request: Request, stepRunner?: Pipel
       console.warn("Madara AI reviewer unavailable:", reviewError);
       reviewWarnings.push("The automated code review did not finish. Review and test the generated scripts in Roblox Studio.");
     }
+
+    // Deduplicate destinations again after reviewer corrections, immediately before export.
+    files = uniqueByPath(files).slice(0, 16);
 
     // 4. Deterministic safety gate: never silently ship known-dangerous patterns.
     const safetyFindings = findUnsafePatterns(files);
