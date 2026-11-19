@@ -4,6 +4,10 @@ import { strToU8, zipSync } from "fflate";
 import { ArrowUp, Check, Code2, Copy, Download, ExternalLink, Gamepad2, Github, Layers3, LoaderCircle, Sparkles, WandSparkles, X, BrainCircuit, Globe2, Workflow, Clock3, Activity } from "lucide-react";
 
 type GeneratedFile = { path: string; kind: string; code: string };
+type PipelineProgress = {
+  stage: string; title: string; detail: string; next: string;
+  completed: string[]; status: "running" | "complete";
+};
 type Agent = { name: string; status: string; detail: string };
 type ScenePart = {
   name: string; parentPath: string; className: "Part" | "SpawnLocation";
@@ -143,7 +147,7 @@ export default function Home() {
   const [project, setProject] = useState<Project | null>(null);
   const [activeFile, setActiveFile] = useState(0);
   const [copied, setCopied] = useState(false);
-  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);\n  const [pipelineProgress, setPipelineProgress] = useState<PipelineProgress | null>(null);
 
   useEffect(() => {
     if (!loading) return;
@@ -164,7 +168,7 @@ export default function Home() {
           const response = await fetch("/api/generate?runId=" + encodeURIComponent(savedRunId), { cache: "no-store" });
           const data = await response.json();
           if (!response.ok) throw new Error(data.error || "Could not resume generation.");
-          if (data.status === "COMPLETED" && data.project) {
+          if (data.progress) setPipelineProgress(data.progress as PipelineProgress);\n          if (data.status === "COMPLETED" && data.project) {
             window.localStorage.removeItem("madara-active-run");
             if (active) { setProject(data.project as Project); setActiveFile(0); }
             return;
@@ -187,7 +191,7 @@ export default function Home() {
 
   async function generate() {
     if (!prompt.trim()) { setError("Write your Roblox game idea first."); return; }
-    setElapsedSeconds(0); setLoading(true); setError(""); setProject(null);
+    setElapsedSeconds(0); setLoading(true); setError(""); setProject(null); setPipelineProgress(null);
     try {
       const startResponse = await fetch("/api/generate", {
         method: "POST", headers: { "Content-Type": "application/json" },
@@ -205,7 +209,7 @@ export default function Home() {
         const statusResponse = await fetch("/api/generate?runId=" + encodeURIComponent(runId), { cache: "no-store" });
         const statusData = await statusResponse.json();
         if (!statusResponse.ok) throw new Error(statusData.error || "Could not read generation status.");
-        if (statusData.status === "COMPLETED" && statusData.project) {
+        if (statusData.progress) setPipelineProgress(statusData.progress as PipelineProgress);\n        if (statusData.status === "COMPLETED" && statusData.project) {
           window.localStorage.removeItem("madara-active-run");
           setProject(statusData.project as Project); setActiveFile(0);
           return;
@@ -347,7 +351,30 @@ export default function Home() {
         <textarea id="game-prompt" maxLength={5000} value={prompt} onChange={e => setPrompt(e.target.value)} placeholder={"Describe the Roblox game you want to create...\n\nExample: An anime simulator with 5 worlds, character companions, quests, boss fights and rebirths."}/>
         <div className="prompt-footer"><span>{prompt.length} / 5000</span><button className="generate-button" onClick={generate} disabled={loading}>{loading ? <><LoaderCircle size={16} className="spin"/> Agents working...</> : <><Sparkles size={16}/> Generate project <ArrowUp size={16}/></>}</button></div>
         {error && <p className="error-message" role="alert"><X size={15}/>{error}</p>}
-        {loading && <div className="agent-running"><div className="agent-running-title"><Workflow size={16}/> MADARA AGENT PIPELINE <span className="pipeline-live"><i/> LIVE</span></div><div className="generation-stats"><div className="generation-stat"><span><Clock3 size={14}/> KOHA LIVE</span><strong>{elapsedLabel}</strong></div><div className="generation-stat"><span><Activity size={14}/> KOHA E LIMITIT</span><strong>{elapsedPercent}%</strong></div></div><div className="generation-progress-track" role="progressbar" aria-label="Elapsed time against the 115-minute generation window" aria-valuemin={0} aria-valuemax={100} aria-valuenow={elapsedPercent}><div className="generation-progress-fill" style={{ width: elapsedPercent + "%" }}/></div><div className="generation-progress-caption"><span>{currentStage}</span><span>{elapsedPercent}%</span></div><div className="current-work-panel"><div className="current-work-heading"><WandSparkles size={14}/><strong>{currentWork.title}</strong><span>STATUS</span></div><ul>{currentWork.tasks.map((task, index) => <li key={index}><span className="work-check"><Check size={11}/></span>{task}</li>)}</ul><p>Keto jane fazat e pipeline-it, jo nje raport i sakte i fazes qe po ekzekutohet ne kete moment.</p></div><div className="agent-running-steps"><span><BrainCircuit size={14}/> Architect</span><span><Globe2 size={14}/> Environment</span><span><Code2 size={14}/> Gameplay</span><span><Check size={14}/> UI + Review</span></div><p>Koha tregon sa nga dritarja maksimale 115-minuteshe ka kaluar; nuk eshte matje e progresit te brendshem te agjenteve.</p></div>}
+        {loading && <div className="agent-running"><div className="agent-running-title"><Workflow size={16}/> MADARA AGENT PIPELINE <span className="pipeline-live"><i/> LIVE</span></div><div className="generation-stats"><div className="generation-stat"><span><Clock3 size={14}/> KOHA LIVE</span><strong>{elapsedLabel}</strong></div><div className="generation-stat"><span><Activity size={14}/> KOHA E LIMITIT</span><strong>{elapsedPercent}%</strong></div></div><div className="generation-progress-track" role="progressbar" aria-label="Elapsed time against the 115-minute generation window" aria-valuemin={0} aria-valuemax={100} aria-valuenow={elapsedPercent}><div className="generation-progress-fill" style={{ width: elapsedPercent + "%" }}/></div><div className="generation-progress-caption"><span>{currentStage}</span><span>{elapsedPercent}%</span></div><div className="current-work-panel">
+          <div className="current-work-heading"><WandSparkles size={14}/><strong>{pipelineProgress?.title || "Agjentet po pergatisin pipeline-in"}</strong><span>LIVE TASK</span></div>
+          <p className="current-work-detail">{pipelineProgress?.detail || "Po merret statusi i pare nga run-i ne sfond."}</p>
+          <div className="pipeline-next"><span>HAPI TJETER</span><strong>{pipelineProgress?.next || "Game Architect"}</strong></div>
+          <div className="pipeline-task-list">
+            {[
+              { id: "architect", label: "Architect", detail: "Planifikon lojen dhe sistemet" },
+              { id: "environment", label: "Environment", detail: "Nderton planin e hartes 3D" },
+              { id: "gameplay", label: "Gameplay", detail: "Shkruan sistemet Luau" },
+              { id: "ui", label: "UI Agent", detail: "Krijon nderfaqen e lojes" },
+              { id: "review", label: "Review", detail: "Kontrollon kodin dhe varesite" },
+              { id: "finalize", label: "Final check", detail: "Validon projektin para eksportit" }
+            ].map(step => {
+              const done = pipelineProgress?.completed?.includes(step.id) || pipelineProgress?.status === "complete";
+              const active = pipelineProgress?.stage === step.id;
+              return <div className={done ? "pipeline-task done" : active ? "pipeline-task active" : "pipeline-task"} key={step.id}>
+                <span className="pipeline-task-icon">{done ? <Check size={14}/> : active ? <LoaderCircle size={14} className="spin"/> : <span className="pipeline-task-dot"/>}</span>
+                <span className="pipeline-task-copy"><strong>{step.label}</strong><small>{active ? pipelineProgress?.detail : step.detail}</small></span>
+                <em>{done ? "DONE" : active ? "NOW" : "NEXT"}</em>
+              </div>;
+            })}
+          </div>
+          <p className="pipeline-truth-note">Shenjat jeshile dalin vetem kur nje faze raporton se ka perfunduar. Koha e limitit nuk eshte progres i agjenteve.</p>
+        </div><p>Koha tregon sa nga dritarja maksimale 115-minuteshe ka kaluar; nuk eshte matje e progresit te brendshem te agjenteve.</p></div>}
         <div className="examples"><span>TRY AN IDEA</span>{examples.map(x => <button key={x} onClick={() => { setPrompt(x); setError(""); }}>{x}<ArrowUp size={12} className="rotate-45"/></button>)}</div>
       </div>
     </section>
