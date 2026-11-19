@@ -31,7 +31,7 @@ export const generateRobloxProject = inngest.createFunction(
       await step.run(`activity-${activitySequence}`, async () => {
         await inngest.send({
           name: "madara/generation.progress",
-          data: { runId: event.id, step: agent.toLowerCase().replace(/[^a-z0-9]+/g, "-"), status: "running", activity },
+          data: { runId: event.id, step: ({ "Game Architect": "architect", "Environment Agent": "environment", "Gameplay Agent": "gameplay", "Roblox UI Agent": "ui-agent", "Luau Code Reviewer": "code-review" } as Record<string, string>)[agent] || "agent", status: "running", activity },
         });
         return { sent: true };
       });
