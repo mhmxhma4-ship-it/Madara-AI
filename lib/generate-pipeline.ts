@@ -373,20 +373,26 @@ export async function runGenerationPipeline(request: Request, stepRunner?: Pipel
             let response: Response | null = null;
             // Gemini can temporarily return 503 during demand spikes.
             // Retry once with a fresh timeout before moving to the next provider.
-            const maxAttempts = attempt.name === "Gemini" ? 2 : 1;
+            // Gemini can return 503 during temporary capacity spikes. Give it
+            // a short exponential-backoff window, then continue to the next provider.
+            const maxAttempts = attempt.name === "Gemini" ? 3 : 1;
             for (let providerTry = 0; providerTry < maxAttempts; providerTry++) {
               try {
                 response = await attempt.run();
               } catch (error) {
-                // Do not retry a timeout immediately: it has already consumed this provider's allocation.
+                // A timeout has already consumed this provider's allocation; let fallback run.
                 if (error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError")) throw error;
                 if (providerTry + 1 >= maxAttempts) throw error;
-                await new Promise(resolve => setTimeout(resolve, 500));
+                await new Promise(resolve => setTimeout(resolve, 750 * (providerTry + 1)));
                 continue;
               }
-              if (response.status !== 503 || providerTry + 1 >= maxAttempts || Date.now() >= agentDeadline - 1300) break;
+              if (response.status !== 503 || providerTry + 1 >= maxAttempts || Date.now() >= agentDeadline - 5_000) break;
+              const retryAfter = Number(response.headers.get("retry-after") || 0);
               await response.text();
-              await new Promise(resolve => setTimeout(resolve, Math.min(900, Math.max(0, agentDeadline - Date.now() - 300))));
+              const backoffMs = retryAfter > 0
+                ? Math.min(4_000, Math.max(1_000, retryAfter * 1_000))
+                : 1_250 * (providerTry + 1);
+              await new Promise(resolve => setTimeout(resolve, Math.min(backoffMs, Math.max(0, agentDeadline - Date.now() - 1_000))));
             }
             if (!response) throw new Error("Provider did not return a response.");
             if (response.ok) return response;
