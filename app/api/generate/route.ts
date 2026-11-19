@@ -40,7 +40,7 @@ export async function GET(request: NextRequest) {
   if (!signingKey) return NextResponse.json({ error: "Inngest signing key is missing. Reconnect the Vercel integration and redeploy." }, { status: 503 });
 
   try {
-    const response = await fetch(`https://api.inngest.com/v2/events/${encodeURIComponent(eventId)}/runs?include=output&limit=5`, {
+    const response = await fetch(`https://api.inngest.com/v1/events/${encodeURIComponent(eventId)}/runs`, {
       headers: { Authorization: `Bearer ${signingKey}` },
       cache: "no-store",
     });
