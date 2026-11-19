@@ -74,7 +74,7 @@ export async function GET(request: NextRequest) {
     const output = run.output && typeof run.output === "object" ? run.output : {};
 
     if (status === "COMPLETED") {
-      if (typeof output.error === "string") return NextResponse.json({ status: "FAILED", error: output.error });
+      if (typeof output.error === "string") return NextResponse.json({ status: "FAILED", error: output.error, progress });
       return NextResponse.json({ status: "COMPLETED", project: output, progress });
     }
 
