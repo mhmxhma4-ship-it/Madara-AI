@@ -515,7 +515,7 @@ export async function runGenerationPipeline(request: Request, stepRunner?: Pipel
     const environmentFiles = validFiles(environment.files, 4);
     const gameplayFiles = validFiles(gameplay.files, 8);
     const interfaceFiles = validFiles(interfaceAgent.files, 3);
-    const files = uniqueByPath([...environmentFiles, ...gameplayFiles, ...interfaceFiles]).slice(0, 16);
+    let files = uniqueByPath([...environmentFiles, ...gameplayFiles, ...interfaceFiles]).slice(0, 16);
 
     const environmentPlan = validScenePlan(environment.buildPlan);
     if (mode === "Full game") {
