@@ -153,7 +153,7 @@ export function buildRobloxPlaceXml(project: {
   if (files.length === 0 && parts.length === 0) throw new Error("This generation has no scripts or 3D objects to export.");
   if (files.length > 100 || parts.length > 100) throw new Error("This generated place exceeds the safe export limit of 100 scripts and 100 scene objects.");
   const root: Node = { className: "DataModel", name: project.projectName?.trim().slice(0, 100) || "MadaraAI_Game", properties: [], children: [] };
-  for (const service of ["Workspace", "ReplicatedStorage", "ServerScriptService", "ServerStorage", "StarterGui", "StarterPlayer", "Lighting"]) {
+  for (const service of ["Workspace", "ReplicatedStorage", "ServerScriptService", "ServerStorage", "StarterGui", "StarterPlayer", "Lighting", "SoundService", "TextChatService"]) {
     root.children.push({ className: service, name: service, properties: [], children: [] });
   }
   const workspace = root.children.find(child => child.name === "Workspace")!;
