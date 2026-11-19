@@ -113,6 +113,30 @@ function validScenePlan(value: unknown): ScenePart[] {
     all.findIndex(other => other.parentPath.toLowerCase() === part.parentPath.toLowerCase() && other.name.toLowerCase() === part.name.toLowerCase()) === index
   );
 }
+function addFallbackMapScaffold(existing: ScenePart[]): ScenePart[] {
+  // Last-resort playable foundation: preserve every AI-authored object and add
+  // only missing structural pieces so a provider outage cannot discard the game.
+  const scaffold: ScenePart[] = [
+    { name: "FallbackGround", parentPath: "World/GeneratedFoundation", className: "Part", position: { x: 0, y: -1, z: 0 }, size: { x: 180, y: 2, z: 180 }, color: { r: 0.28, g: 0.38, b: 0.25 }, material: "Ground", shape: "Block", rotation: { x: 0, y: 0, z: 0 }, anchored: true, canCollide: true, transparency: 0 },
+    { name: "FallbackSpawn", parentPath: "World/GeneratedFoundation", className: "SpawnLocation", position: { x: 0, y: 1, z: 0 }, size: { x: 12, y: 1, z: 12 }, color: { r: 0.2, g: 0.65, b: 0.35 }, material: "Concrete", shape: "Block", rotation: { x: 0, y: 0, z: 0 }, anchored: true, canCollide: true, transparency: 0 },
+    { name: "MainPathNorth", parentPath: "World/GeneratedFoundation", className: "Part", position: { x: 0, y: 0.1, z: -24 }, size: { x: 10, y: 0.4, z: 36 }, color: { r: 0.42, g: 0.39, b: 0.32 }, material: "Ground", shape: "Block", rotation: { x: 0, y: 0, z: 0 }, anchored: true, canCollide: true, transparency: 0 },
+    { name: "MainPathSouth", parentPath: "World/GeneratedFoundation", className: "Part", position: { x: 0, y: 0.1, z: 24 }, size: { x: 10, y: 0.4, z: 36 }, color: { r: 0.42, g: 0.39, b: 0.32 }, material: "Ground", shape: "Block", rotation: { x: 0, y: 0, z: 0 }, anchored: true, canCollide: true, transparency: 0 },
+    { name: "BoundaryWest", parentPath: "World/GeneratedFoundation", className: "Part", position: { x: -92, y: 8, z: 0 }, size: { x: 4, y: 16, z: 184 }, color: { r: 0.22, g: 0.3, b: 0.22 }, material: "Rock", shape: "Block", rotation: { x: 0, y: 0, z: 0 }, anchored: true, canCollide: true, transparency: 0 },
+    { name: "BoundaryEast", parentPath: "World/GeneratedFoundation", className: "Part", position: { x: 92, y: 8, z: 0 }, size: { x: 4, y: 16, z: 184 }, color: { r: 0.22, g: 0.3, b: 0.22 }, material: "Rock", shape: "Block", rotation: { x: 0, y: 0, z: 0 }, anchored: true, canCollide: true, transparency: 0 },
+    { name: "BoundaryNorth", parentPath: "World/GeneratedFoundation", className: "Part", position: { x: 0, y: 8, z: -92 }, size: { x: 184, y: 16, z: 4 }, color: { r: 0.22, g: 0.3, b: 0.22 }, material: "Rock", shape: "Block", rotation: { x: 0, y: 0, z: 0 }, anchored: true, canCollide: true, transparency: 0 },
+    { name: "BoundarySouth", parentPath: "World/GeneratedFoundation", className: "Part", position: { x: 0, y: 8, z: 92 }, size: { x: 184, y: 16, z: 4 }, color: { r: 0.22, g: 0.3, b: 0.22 }, material: "Rock", shape: "Block", rotation: { x: 0, y: 0, z: 0 }, anchored: true, canCollide: true, transparency: 0 },
+    { name: "LandmarkNorth", parentPath: "World/GeneratedFoundation", className: "Part", position: { x: 0, y: 4, z: -62 }, size: { x: 18, y: 8, z: 18 }, color: { r: 0.48, g: 0.46, b: 0.4 }, material: "Slate", shape: "Block", rotation: { x: 0, y: 0, z: 0 }, anchored: true, canCollide: true, transparency: 0 },
+    { name: "LandmarkSouth", parentPath: "World/GeneratedFoundation", className: "Part", position: { x: 0, y: 4, z: 62 }, size: { x: 18, y: 8, z: 18 }, color: { r: 0.48, g: 0.46, b: 0.4 }, material: "Slate", shape: "Block", rotation: { x: 0, y: 0, z: 0 }, anchored: true, canCollide: true, transparency: 0 },
+    { name: "SidePathWest", parentPath: "World/GeneratedFoundation", className: "Part", position: { x: -28, y: 0.1, z: 0 }, size: { x: 36, y: 0.4, z: 8 }, color: { r: 0.42, g: 0.39, b: 0.32 }, material: "Ground", shape: "Block", rotation: { x: 0, y: 0, z: 0 }, anchored: true, canCollide: true, transparency: 0 },
+    { name: "SidePathEast", parentPath: "World/GeneratedFoundation", className: "Part", position: { x: 28, y: 0.1, z: 0 }, size: { x: 36, y: 0.4, z: 8 }, color: { r: 0.42, g: 0.39, b: 0.32 }, material: "Ground", shape: "Block", rotation: { x: 0, y: 0, z: 0 }, anchored: true, canCollide: true, transparency: 0 }
+  ];
+  const merged = [...existing];
+  for (const part of scaffold) {
+    if (!merged.some(item => item.parentPath.toLowerCase() === part.parentPath.toLowerCase() && item.name.toLowerCase() === part.name.toLowerCase())) merged.push(part);
+  }
+  return merged.slice(0, 100);
+}
+
 function uniqueByPath(files: GeneratedFile[]) {
   return files.filter((file, index, all) =>
     all.findIndex(other => other.path.toLowerCase() === file.path.toLowerCase()) === index
@@ -559,6 +583,13 @@ export async function runGenerationPipeline(request: Request, stepRunner?: Pipel
         }
       }
     }
+    let fallbackMapAdded = false;
+    if (mode === "Full game" && environmentPlan.length < 10) {
+      environmentPlan = addFallbackMapScaffold(environmentPlan);
+      fallbackMapAdded = true;
+      console.warn("Madara AI added a safe fallback map foundation because the AI environment plan was incomplete.");
+    }
+
     if (mode === "Full game") {
       // A model may return fewer Gameplay Agent files while the UI or Environment
       // Agent already supplied a valid client/module. Validate the merged package,
@@ -683,6 +714,7 @@ export async function runGenerationPipeline(request: Request, stepRunner?: Pipel
         { name: "Luau Reviewer", status: reviewerCompleted && reviewWarnings.length === 0 ? "complete" : "warning", detail: !reviewerCompleted ? "Automated review did not finish; manual Studio testing is required." : reviewWarnings.length > 0 ? "Review completed with remaining warnings. Read the notes before inserting." : "Project reviewed and concrete fixes applied where needed." }
       ],
       agentNotes: [
+        ...(fallbackMapAdded ? ["The AI map response was incomplete, so Madara AI added a basic playable foundation (ground, spawn, paths, boundaries and landmarks). Expand the map in Studio for the requested detailed world."] : []),
         ...strings(environment.environmentNotes, 4),
         ...strings(gameplay.gameplayNotes, 5),
         ...strings(interfaceAgent.gameplayNotes, 3),
