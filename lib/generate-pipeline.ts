@@ -195,6 +195,7 @@ export async function runGenerationPipeline(request: Request, stepRunner?: Pipel
         "Environment Agent": "Po projekton harten 3D, pozicionet, permasat dhe materialet e objekteve.",
         "Gameplay Agent": "Po shkruan skriptet Luau per mekanikat, progresin dhe logjiken e lojes.",
         "Roblox UI Agent": "Po nderton HUD, menute dhe kontrollet per telefon dhe desktop.",
+        "Package Recovery Agent": "Po ploteson skedaret qe mungojne dhe po riparon strukturen e paketes.",
         "Luau Code Reviewer": "Po kontrollon skriptet, varesite dhe sigurine e kodit Luau."
       };
       await onActivity?.(agentName, activityByAgent[agentName] || `Po punon ne fazen ${agentName}.`);
@@ -518,12 +519,50 @@ export async function runGenerationPipeline(request: Request, stepRunner?: Pipel
 
     const environmentPlan = validScenePlan(environment.buildPlan);
     if (mode === "Full game") {
-      const hasServer = files.some(file => file.kind === "server");
-      const hasClient = files.some(file => file.kind === "client");
-      const hasShared = files.some(file => file.kind === "module");
-      if (gameplayFiles.length < 3 || !hasServer || !hasClient || !hasShared) {
+      // A model may return fewer Gameplay Agent files while the UI or Environment
+      // Agent already supplied a valid client/module. Validate the merged package,
+      // then ask the provider chain to generate only the missing required roles.
+      const getMissingRoles = () => {
+        const roles = [
+          { kind: "server", label: "server gameplay", path: "ServerScriptService/MadaraGenerated/Main.server.lua" },
+          { kind: "client", label: "client controller", path: "StarterPlayer/StarterPlayerScripts/MadaraGenerated/Client.client.lua" },
+          { kind: "module", label: "shared configuration/module", path: "ReplicatedStorage/MadaraGenerated/Config.module.lua" }
+        ] as const;
+        return roles.filter(role => !files.some(file => file.kind === role.kind));
+      };
+
+      for (let repairAttempt = 1; repairAttempt <= 2 && getMissingRoles().length > 0; repairAttempt++) {
+        const missing = getMissingRoles();
+        try {
+          const recovery = await runStep(`package-recovery-${repairAttempt}`, () => askAgent(
+            "Package Recovery Agent",
+            `The Full game package is incomplete. Generate ONLY the missing required Luau files listed below. Do not rewrite existing files and do not return a plan.
+              Missing roles: ${missing.map(role => `${role.kind} (${role.label}) at exact path ${role.path}`).join("; ")}.
+              Return JSON exactly as { "files": [{ "path": "exact path from list", "kind": "server|client|module", "code": "complete runnable Luau source" }] }.
+              Requirements: server file must contain real server-side gameplay and validate client requests; client file must be a LocalScript controller with safe RemoteEvent usage; module file must return a shared configuration/table using return {...}. Use the exact path and kind for each missing role. Each file must be complete, non-empty, and under 60000 characters. If more than one role is missing, return one separate file for every missing role.`,
+            3600,
+            JSON.stringify({
+              projectName: architect.projectName,
+              gameDesign: architect.gameDesign,
+              blueprint: blueprintContext,
+              existingFiles: files.map(file => ({ path: file.path, kind: file.kind, purpose: file.code.slice(0, 500) })),
+              missingRoles: missing
+            }),
+            240_000
+          ));
+          const recoveredFiles = validFiles(recovery.files, 6);
+          files = uniqueByPath([...files, ...recoveredFiles]).slice(0, 16);
+        } catch (repairError) {
+          console.warn(`Madara AI package recovery attempt ${repairAttempt} failed:`, repairError);
+        }
+      }
+
+      const missingRoles = getMissingRoles();
+      if (files.length < 3 || missingRoles.length > 0) {
         return Response.json({
-          error: "Madara AI could not complete the game package. A full game must include server gameplay, a client controller and shared configuration/modules. No incomplete ZIP was created. Try Generate again; if it repeats, reduce the game scope or check the Groq model limits."
+          error: missingRoles.length > 0
+            ? `Madara AI generated most of the game, but could not complete these required files after two automatic repair attempts: ${missingRoles.map(role => role.label).join(", ")}. The other generated files were kept internally; no incomplete ZIP was created. Try a shorter game description or retry when the AI providers are available.`
+            : "Madara AI could not create at least three usable game scripts. No incomplete ZIP was created. Try a more focused game description."
         }, { status: 502 });
       }
       if (environmentPlan.length < 10) {
