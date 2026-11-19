@@ -147,7 +147,8 @@ export default function Home() {
   const [project, setProject] = useState<Project | null>(null);
   const [activeFile, setActiveFile] = useState(0);
   const [copied, setCopied] = useState(false);
-  const [elapsedSeconds, setElapsedSeconds] = useState(0);\n  const [pipelineProgress, setPipelineProgress] = useState<PipelineProgress | null>(null);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [pipelineProgress, setPipelineProgress] = useState<PipelineProgress | null>(null);
 
   useEffect(() => {
     if (!loading) return;
