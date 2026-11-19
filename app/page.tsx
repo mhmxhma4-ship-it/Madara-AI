@@ -316,17 +316,10 @@ export default function Home() {
   }
 
   const currentFile = project?.files[activeFile];
-  const elapsedPercent = Math.min(99, Math.round((elapsedSeconds / (55 * 60)) * 100));
+  const elapsedPercent = Math.min(99, Math.round((elapsedSeconds / (115 * 60)) * 100));
   const elapsedLabel = `${String(Math.floor(elapsedSeconds / 60)).padStart(2, "0")}:${String(elapsedSeconds % 60).padStart(2, "0")}`;
   const currentStage = "Background generation";
-  const currentWork = {
-    title: "Gjenerimi po vazhdon ne sfond",
-    tasks: [
-      "Agjentet AI po punojne ne Trigger.dev, jashte kufirit te kerkeses Vercel",
-      "Run-i vazhdon ne Trigger.dev edhe nese faqja rifreskohet ose mbyllet",
-      "Rezultati do te shfaqet ketu kur gjenerimi te perfundoje"
-    ]
-  };
+
 
   return <main className="min-h-screen overflow-hidden">
     <header className="topbar">
