@@ -8,6 +8,7 @@ type ScenePart = {
   anchored: boolean; canCollide: boolean; transparency: number;
 };
 type JsonObject = Record<string, unknown>;
+type PipelineStepRunner = (name: string, run: () => Promise<JsonObject>) => Promise<JsonObject>;
 
 const allowedModes: BuildMode[] = ["Full game", "Game map", "Gameplay system", "UI interface", "Lua script"];
 const MAX_PROMPT_LENGTH = 5000;
@@ -120,7 +121,8 @@ function findUnsafePatterns(files: GeneratedFile[]) {
 }
 
 
-export async function runGenerationPipeline(request: Request) {
+export async function runGenerationPipeline(request: Request, stepRunner?: PipelineStepRunner) {
+  const runStep = stepRunner ?? ((_name: string, run: () => Promise<JsonObject>) => run());
   try {
     const contentLength = Number(request.headers.get("content-length") || 0);
     if (contentLength > 24_000) {
@@ -432,7 +434,7 @@ export async function runGenerationPipeline(request: Request) {
     }
 
     // 1. Architect: decide the game loop, world progression and systems before code exists.
-    const architect = await askAgent(
+    const architect = await runStep("architect", () => askAgent(
       "Game Architect",
       `Create a complete, original game blueprint tailored to the user's exact idea. Return JSON with:
       projectName (string), summary (string), gameDesign (string),
@@ -441,8 +443,8 @@ export async function runGenerationPipeline(request: Request) {
       Define the core gameplay loop, player goals, progression, rewards, failure/retry loop and multiplayer assumptions. Do not invent unrelated themes. Define a premium realistic 3D art direction with believable proportions, natural colors, realistic materials, lighting and weather. Do not choose Minecraft, voxel, blocky or low-poly aesthetics unless explicitly requested.`,
       2200,
       "",
-      20 * 60_000
-    );
+      240_000
+    ));
 
     const blueprintContext = JSON.stringify({
       projectName: architect.projectName,
@@ -457,7 +459,7 @@ export async function runGenerationPipeline(request: Request) {
     // 2. Specialist agents build the environment, gameplay and interface from one blueprint.
     // Run specialist agents sequentially. Groq applies TPM limits across the whole
     // organization, so parallel calls create avoidable bursts and 429 responses.
-    const environment = await askAgent(
+    const environment = await runStep("environment", () => askAgent(
       "Environment Agent",
       `Build the actual Roblox environment from this approved blueprint: ${blueprintContext}
         Return JSON with buildPlan: array of 25-45 objects {name,parentPath,className,position,size,color,material,shape,rotation,anchored,canCollide,transparency}; files: array of 0-3 objects {path,kind,code}; environmentNotes: array of 2-4 strings.
@@ -465,32 +467,32 @@ export async function runGenerationPipeline(request: Request) {
         parentPath is relative to Workspace, such as "World/SpawnArea". className Part or SpawnLocation. Use studs and believable scale. Avoid floating geometry. Every file must be complete Luau source, never pseudocode.`,
       3400,
       "",
-      20 * 60_000
-    );
+      240_000
+    ));
 
-    const gameplay = await askAgent(
+    const gameplay = await runStep("gameplay", () => askAgent(
       "Gameplay Agent",
       `Build the complete playable game systems from this approved blueprint: ${blueprintContext}
         Return JSON with files: array of 5-8 objects {path,kind,code}; gameplayNotes: array of 3-5 strings.
         THIS IS A FULL GAME BUILD, NOT A DEMO OR PLAN. Implement the core gameplay loop described by the user, not generic placeholder code. Include all essential dependencies and a clear server/client split. For a multiplayer game, implement server-authoritative player/session state and safe handling when players join/leave. For progression games, implement the actual currency/reward/progression loop. For stage games, implement checkpoints, completion and respawn. For combat games, implement validated damage, cooldowns and enemy/boss behavior. Use RemoteEvents created safely by the server and validate every client request. Use DataStoreService with pcall, retries or graceful defaults; the game must still run if saving is unavailable in Studio. Use correct Roblox service paths and full scripts. Do not create UI; the Interface Agent owns UI. Do not duplicate static map parts from buildPlan.`,
       3800,
       "",
-      180000
-    );
+      240_000
+    ));
 
     let interfaceAgent: JsonObject = { files: [], gameplayNotes: [] };
     let interfaceAgentError = "";
     if ((mode === "Full game" || mode === "UI interface") && Date.now() < generationDeadline - 9500) {
       try {
-        interfaceAgent = await askAgent(
+        interfaceAgent = await runStep("ui-agent", () => askAgent(
           "Roblox UI Agent",
           `Create the complete player-facing interface for this Roblox project using this blueprint: ${blueprintContext}
             Return JSON with files: array of 1-3 objects {path,kind,code}; gameplayNotes: array of 2-4 strings.
             For Full game, provide a polished premium mobile-friendly StarterPlayer/StarterPlayerScripts/HUD.client.lua LocalScript that creates its ScreenGui at runtime, scales for touch and desktop, displays the actual game stats/progression, and connects only to RemoteEvents/RemoteFunctions that are part of the blueprint. Use modern high-quality game HUD design, clean typography, restrained colors, subtle gradients and strokes, consistent spacing and responsive controls; never use childish blocky/Minecraft-style UI unless requested. If no remotes are specified, coordinate names with the Gameplay Agent using conventional names and document them in gameplayNotes. Include clear feedback, readable buttons and safe touch input. Do not implement server-authoritative game logic in the client. For UI interface mode, focus on the requested UI and its client behavior. Return full runnable Luau, not pseudocode.`,
           1500,
           "",
-          15 * 60_000
-        );
+          240_000
+        ));
       } catch (error) {
         // UI is an optional specialist: a provider TPM limit must not discard
         // the Architect, environment and gameplay work already completed.
@@ -533,15 +535,15 @@ export async function runGenerationPipeline(request: Request) {
     let reviewerCompleted = false;
     try {
       if (Date.now() >= generationDeadline - 7500) throw new Error("Not enough generation time remains for the optional reviewer.");
-      const review = await askAgent(
+      const review = await runStep("code-review", () => askAgent(
         "Luau Code Reviewer",
         `Review the complete generated project and 3D scene plan for Roblox Luau correctness, missing dependencies, incorrect service paths, server/client boundary mistakes, unsafe remote handling, DataStore error handling, floating or badly scaled map geometry and obvious logic defects. Return JSON with:
         files: array containing corrected full files {path,kind,code}; qualityChecks: array of concise checks performed; warnings: array of genuine remaining risks; sceneWarnings: array of map-specific issues.
         IMPORTANT: Return a corrected file only when you made a real improvement. Preserve the exact path and kind for every corrected file. Do not rewrite working code just for style. Do not add unrelated systems. If a file is already sound, omit it from files. Never say code was executed or tested.`,
         3000,
         JSON.stringify({ blueprint: architect, files, environmentPlan }),
-        10 * 60_000
-      );
+        240_000
+      ));
       const corrected = validFiles(review.files, 8);
       for (const fix of corrected) {
         const index = files.findIndex(file => file.path.toLowerCase() === fix.path.toLowerCase());
