@@ -9,33 +9,40 @@ const json = (message: string, status: number) =>
 export async function POST(request: NextRequest) {
   try {
     const form = await request.formData();
-    const apiKey = form.get("apiKey");
-    const universeId = form.get("universeId");
-    const placeId = form.get("placeId");
+    const rawApiKey = form.get("apiKey");
+    const apiKey = typeof rawApiKey === "string" ? rawApiKey.trim() : "";
+    const rawUniverseId = form.get("universeId");
+    const rawPlaceId = form.get("placeId");
     const file = form.get("placeFile");
 
-    if (typeof apiKey !== "string" || apiKey.length < 10 || apiKey.length > 500) {
-      return json("Enter a valid Roblox Open Cloud API key.", 400);
+    // Roblox Open Cloud keys can be longer than 500 characters.
+    // Validate a generous upper bound instead of rejecting valid long keys.
+    if (!apiKey || apiKey.length < 10 || apiKey.length > 4096 || /\\s/.test(apiKey)) {
+      return json("API key is missing or malformed. Paste the complete Roblox Open Cloud key without spaces.", 400);
     }
-    if (typeof universeId !== "string" || !/^\d{1,25}$/.test(universeId)) {
+    if (typeof rawUniverseId !== "string" || !/^\\d{1,25}$/.test(rawUniverseId.trim())) {
       return json("Enter the numeric Universe ID.", 400);
     }
-    if (typeof placeId !== "string" || !/^\d{1,25}$/.test(placeId)) {
+    if (typeof rawPlaceId !== "string" || !/^\\d{1,25}$/.test(rawPlaceId.trim())) {
       return json("Enter the numeric Place ID.", 400);
     }
     if (!(file instanceof File)) {
       return json("Choose an .rbxlx or .rbxl place file first.", 400);
     }
-    const isXml = file.name.toLowerCase().endsWith(".rbxlx");
-    const isBinary = file.name.toLowerCase().endsWith(".rbxl");
+
+    const fileName = file.name.toLowerCase();
+    const isXml = fileName.endsWith(".rbxlx") || fileName.endsWith(".rbxlx.xml");
+    const isBinary = fileName.endsWith(".rbxl");
     if (!isXml && !isBinary) {
-      return json("Only Roblox .rbxlx and .rbxl files are supported.", 400);
+      return json("Only Roblox .rbxlx, .rbxlx.xml and .rbxl files are supported.", 400);
     }
     if (file.size < 20 || file.size > 10 * 1024 * 1024) {
       return json("The place file must be between 20 bytes and 10 MB.", 400);
     }
 
     const bytes = await file.arrayBuffer();
+    const universeId = (rawUniverseId as string).trim();
+    const placeId = (rawPlaceId as string).trim();
     const robloxUrl =
       `https://apis.roblox.com/universes/v1/${universeId}/places/${placeId}/versions?versionType=Published`;
 
