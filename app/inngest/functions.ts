@@ -25,16 +25,15 @@ export const generateRobloxProject = inngest.createFunction(
       });
     };
 
-    let activitySequence = 0;
     const emitActivity = async (agent: string, activity: string) => {
-      activitySequence += 1;
-      await step.run(`activity-${activitySequence}`, async () => {
+      try {
         await inngest.send({
           name: "madara/generation.progress",
           data: { runId: event.id, step: ({ "Game Architect": "architect", "Environment Agent": "environment", "Gameplay Agent": "gameplay", "Roblox UI Agent": "ui-agent", "Luau Code Reviewer": "code-review" } as Record<string, string>)[agent] || "agent", status: "running", activity },
         });
-        return { sent: true };
-      });
+      } catch (error) {
+        console.warn("Madara AI activity update could not be sent:", error);
+      }
     };
 
     const response = await runGenerationPipeline(request, async (name, run) => {
