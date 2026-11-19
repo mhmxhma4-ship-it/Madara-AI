@@ -52,15 +52,30 @@ export async function GET(request: NextRequest) {
         output?: Record<string, unknown> | null;
       }>;
     };
+    const progressResponse = await fetch("https://api.inngest.com/v1/events?name=madara%2Fgeneration.progress&limit=50", {
+      headers: { Authorization: `Bearer ${signingKey}` },
+      cache: "no-store",
+    });
+    let progress: Array<{ step: string; status: string; activity?: string; ts?: number }> = [];
+    if (progressResponse.ok) {
+      const progressPayload = await progressResponse.json() as {
+        data?: Array<{ data?: { runId?: string; step?: string; status?: string; activity?: string }; ts?: number }>;
+      };
+      progress = (progressPayload.data || [])
+        .filter(item => item.data?.runId === eventId && typeof item.data.step === "string" && typeof item.data.status === "string")
+        .map(item => ({ step: item.data!.step!, status: item.data!.status!, activity: typeof item.data!.activity === "string" ? item.data!.activity : undefined, ts: item.ts }))
+        .sort((left, right) => (left.ts || 0) - (right.ts || 0));
+    }
+
     const run = payload.data?.[0];
-    if (!run) return NextResponse.json({ status: "QUEUED" });
+    if (!run) return NextResponse.json({ status: "QUEUED", progress });
 
     const status = String(run.status || "UNKNOWN").toUpperCase();
     const output = run.output && typeof run.output === "object" ? run.output : {};
 
     if (status === "COMPLETED") {
-      if (typeof output.error === "string") return NextResponse.json({ status: "FAILED", error: output.error });
-      return NextResponse.json({ status: "COMPLETED", project: output });
+      if (typeof output.error === "string") return NextResponse.json({ status: "FAILED", error: output.error, progress });
+      return NextResponse.json({ status: "COMPLETED", project: output, progress });
     }
 
     if (status === "FAILED" || status === "CANCELLED" || status === "SKIPPED") {
@@ -68,10 +83,10 @@ export async function GET(request: NextRequest) {
         typeof output.message === "string" ? output.message :
         typeof output.error === "string" ? output.error :
         "Background generation failed. Open Inngest Runs to inspect the error.";
-      return NextResponse.json({ status: "FAILED", error: errorMessage });
+      return NextResponse.json({ status: "FAILED", error: errorMessage, progress });
     }
 
-    return NextResponse.json({ status: status === "QUEUED" ? "QUEUED" : "RUNNING" });
+    return NextResponse.json({ status: status === "QUEUED" ? "QUEUED" : "RUNNING", progress });
   } catch (error) {
     console.error("Madara AI run lookup failed:", error);
     return NextResponse.json({ error: "Could not read generation status. Check the Inngest signing key and Runs dashboard." }, { status: 503 });

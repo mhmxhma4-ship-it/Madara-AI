@@ -121,7 +121,7 @@ function findUnsafePatterns(files: GeneratedFile[]) {
 }
 
 
-export async function runGenerationPipeline(request: Request, stepRunner?: PipelineStepRunner) {
+export async function runGenerationPipeline(request: Request, stepRunner?: PipelineStepRunner, onActivity?: (agent: string, activity: string) => Promise<void> | void) {
   const runStep = stepRunner ?? ((_name: string, run: () => Promise<JsonObject>) => run());
   try {
     const contentLength = Number(request.headers.get("content-length") || 0);
@@ -190,6 +190,14 @@ export async function runGenerationPipeline(request: Request, stepRunner?: Pipel
       extraContext = "",
       timeoutMs = 20 * 60_000
     ): Promise<JsonObject> {
+      const activityByAgent: Record<string, string> = {
+        "Game Architect": "Po analizon idene, percakton gameplay loop dhe planifikon botet e lojes.",
+        "Environment Agent": "Po projekton harten 3D, pozicionet, permasat dhe materialet e objekteve.",
+        "Gameplay Agent": "Po shkruan skriptet Luau per mekanikat, progresin dhe logjiken e lojes.",
+        "Roblox UI Agent": "Po nderton HUD, menute dhe kontrollet per telefon dhe desktop.",
+        "Luau Code Reviewer": "Po kontrollon skriptet, varesite dhe sigurine e kodit Luau."
+      };
+      await onActivity?.(agentName, activityByAgent[agentName] || `Po punon ne fazen ${agentName}.`);
       const agentDeadline = Math.min(generationDeadline, Date.now() + timeoutMs);
       const payload: Record<string, unknown> = {
         model,

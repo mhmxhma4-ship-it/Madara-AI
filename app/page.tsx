@@ -144,6 +144,7 @@ export default function Home() {
   const [activeFile, setActiveFile] = useState(0);
   const [copied, setCopied] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [progress, setProgress] = useState<Array<{ step: string; status: string; activity?: string; ts?: number }>>([]);
 
   useEffect(() => {
     if (!loading) return;
@@ -164,6 +165,7 @@ export default function Home() {
           const response = await fetch("/api/generate?runId=" + encodeURIComponent(savedRunId), { cache: "no-store" });
           const data = await response.json();
           if (!response.ok) throw new Error(data.error || "Could not resume generation.");
+          setProgress(Array.isArray(data.progress) ? data.progress : []);
           if (data.status === "COMPLETED" && data.project) {
             window.localStorage.removeItem("madara-active-run");
             if (active) { setProject(data.project as Project); setActiveFile(0); }
@@ -205,6 +207,7 @@ export default function Home() {
         const statusResponse = await fetch("/api/generate?runId=" + encodeURIComponent(runId), { cache: "no-store" });
         const statusData = await statusResponse.json();
         if (!statusResponse.ok) throw new Error(statusData.error || "Could not read generation status.");
+        setProgress(Array.isArray(statusData.progress) ? statusData.progress : []);
         if (statusData.status === "COMPLETED" && statusData.project) {
           window.localStorage.removeItem("madara-active-run");
           setProject(statusData.project as Project); setActiveFile(0);
@@ -312,17 +315,22 @@ export default function Home() {
   }
 
   const currentFile = project?.files[activeFile];
-  const elapsedPercent = Math.min(99, Math.round((elapsedSeconds / (55 * 60)) * 100));
   const elapsedLabel = `${String(Math.floor(elapsedSeconds / 60)).padStart(2, "0")}:${String(elapsedSeconds % 60).padStart(2, "0")}`;
   const currentStage = "Background generation";
-  const currentWork = {
-    title: "Gjenerimi po vazhdon ne sfond",
-    tasks: [
-      "Agjentet AI po punojne ne Inngest, jashte kufirit te kerkeses Vercel",
-      "Run-i vazhdon ne Inngest edhe nese faqja rifreskohet ose mbyllet",
-      "Rezultati do te shfaqet ketu kur gjenerimi te perfundoje"
-    ]
-  };
+  const progressStages = [
+    { id: "architect", title: "Game Architect", description: "Analizon idene dhe krijon planin e lojes." },
+    { id: "environment", title: "Environment Agent", description: "Nderton planin e hartes dhe objekteve 3D." },
+    { id: "gameplay", title: "Gameplay Agent", description: "Krijon sistemet, mekanikat dhe skriptet Luau." },
+    { id: "ui-agent", title: "UI Agent", description: "Nderton nderfaqen mobile dhe kontrollet." },
+    { id: "code-review", title: "Code Reviewer", description: "Kontrollon kodin dhe rregullon gabimet e gjetura." }
+  ];
+  const activeProgress = progress.find(item => item.status === "running");
+  const latestProgress = progress.length ? progress[progress.length - 1] : null;
+  const latestActivity = [...progress].reverse().find(item => item.activity)?.activity;
+  const visibleProgressStages = progressStages.filter(stage => stage.id !== "ui-agent" || ["Full game", "UI interface"].includes(mode));
+  const completedProgressCount = visibleProgressStages.filter(stage => progress.some(item => item.step === stage.id && item.status === "complete")).length;
+  const progressPercent = Math.round((completedProgressCount / visibleProgressStages.length) * 100);
+
 
   return <main className="min-h-screen overflow-hidden">
     <header className="topbar">
@@ -347,7 +355,7 @@ export default function Home() {
         <textarea id="game-prompt" maxLength={5000} value={prompt} onChange={e => setPrompt(e.target.value)} placeholder={"Describe the Roblox game you want to create...\n\nExample: An anime simulator with 5 worlds, character companions, quests, boss fights and rebirths."}/>
         <div className="prompt-footer"><span>{prompt.length} / 5000</span><button className="generate-button" onClick={generate} disabled={loading}>{loading ? <><LoaderCircle size={16} className="spin"/> Agents working...</> : <><Sparkles size={16}/> Generate project <ArrowUp size={16}/></>}</button></div>
         {error && <p className="error-message" role="alert"><X size={15}/>{error}</p>}
-        {loading && <div className="agent-running"><div className="agent-running-title"><Workflow size={16}/> MADARA AGENT PIPELINE <span className="pipeline-live"><i/> LIVE</span></div><div className="generation-stats"><div className="generation-stat"><span><Clock3 size={14}/> KOHA LIVE</span><strong>{elapsedLabel}</strong></div><div className="generation-stat"><span><Activity size={14}/> KOHA E LIMITIT</span><strong>{elapsedPercent}%</strong></div></div><div className="generation-progress-track" role="progressbar" aria-label="Elapsed time against the 115-minute generation window" aria-valuemin={0} aria-valuemax={100} aria-valuenow={elapsedPercent}><div className="generation-progress-fill" style={{ width: elapsedPercent + "%" }}/></div><div className="generation-progress-caption"><span>{currentStage}</span><span>{elapsedPercent}%</span></div><div className="current-work-panel"><div className="current-work-heading"><WandSparkles size={14}/><strong>{currentWork.title}</strong><span>STATUS</span></div><ul>{currentWork.tasks.map((task, index) => <li key={index}><span className="work-check"><Check size={11}/></span>{task}</li>)}</ul><p>Keto jane fazat e pipeline-it, jo nje raport i sakte i fazes qe po ekzekutohet ne kete moment.</p></div><div className="agent-running-steps"><span><BrainCircuit size={14}/> Architect</span><span><Globe2 size={14}/> Environment</span><span><Code2 size={14}/> Gameplay</span><span><Check size={14}/> UI + Review</span></div><p>Koha tregon sa nga dritarja maksimale 115-minuteshe ka kaluar; nuk eshte matje e progresit te brendshem te agjenteve.</p></div>}
+        {loading && <div className="agent-running"><div className="agent-running-title"><Workflow size={16}/> MADARA AGENT PIPELINE <span className="pipeline-live"><i/> LIVE</span></div><div className="generation-stats"><div className="generation-stat"><span><Clock3 size={14}/> KOHA LIVE</span><strong>{elapsedLabel}</strong></div><div className="generation-stat"><span><Activity size={14}/> HAPA TE MBARUAR</span><strong>{completedProgressCount}/{visibleProgressStages.length}</strong></div></div><div className="generation-progress-track" role="progressbar" aria-label="Completed agent stages" aria-valuemin={0} aria-valuemax={visibleProgressStages.length} aria-valuenow={completedProgressCount}><div className="generation-progress-fill" style={{ width: progressPercent + "%" }}/></div><div className="generation-progress-caption"><span>Progres real i agjenteve</span><span>{progressPercent}%</span></div><div className="current-work-panel"><div className="current-work-heading"><WandSparkles size={14}/><strong>{activeProgress ? `Po punohet: ${progressStages.find(stage => stage.id === activeProgress.step)?.title || activeProgress.step}` : latestProgress?.status === "complete" ? "Po pergatitet faza tjeter" : "Po pret nisjen e agjenteve"}</strong><span>LIVE</span></div><p>{activeProgress ? progressStages.find(stage => stage.id === activeProgress.step)?.description : "Statusi perditesohet nga hapat reale te Inngest."}</p>{latestActivity && <div className="live-activity-detail"><span>AKTIVITETI AKTUAL</span><strong>{latestActivity}</strong></div>}<ol className="generation-stage-list">{visibleProgressStages.map((stage, index) => { const item = progress.some(entry => entry.step === stage.id && entry.status === "complete"); const running = activeProgress?.step === stage.id; const failed = progress.some(entry => entry.step === stage.id && entry.status === "failed"); const skipped = false; return <li key={stage.id} className={item ? "stage-complete" : running ? "stage-running" : failed ? "stage-failed" : ""}><span className="stage-indicator">{item ? <Check size={13}/> : failed ? <X size={13}/> : index + 1}</span><span><strong>{stage.title}</strong><small>{item ? "Perfundoi" : running ? "Ne proces..." : failed ? "Nuk perfundoi" : skipped ? "Kalohet per kete mode" : "Ne pritje"}</small></span></li>; })}</ol><p>Shenjat e perfundimit dalin vetem kur hapi real mbaron. Koha e kaluar nuk paraqitet si perqindje e rreme e punes.</p></div></div>}
         <div className="examples"><span>TRY AN IDEA</span>{examples.map(x => <button key={x} onClick={() => { setPrompt(x); setError(""); }}>{x}<ArrowUp size={12} className="rotate-45"/></button>)}</div>
       </div>
     </section>
