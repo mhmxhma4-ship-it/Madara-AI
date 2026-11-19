@@ -17,13 +17,13 @@ export async function POST(request: NextRequest) {
 
     // Roblox Open Cloud keys can be longer than 500 characters.
     // Validate a generous upper bound instead of rejecting valid long keys.
-    if (!apiKey || apiKey.length < 10 || apiKey.length > 4096 || /\\s/.test(apiKey)) {
+    if (!apiKey || apiKey.length < 10 || apiKey.length > 4096 || /\s/.test(apiKey)) {
       return json("API key is missing or malformed. Paste the complete Roblox Open Cloud key without spaces.", 400);
     }
-    if (typeof rawUniverseId !== "string" || !/^\\d{1,25}$/.test(rawUniverseId.trim())) {
+    if (typeof rawUniverseId !== "string" || !/^\d{1,25}$/.test(rawUniverseId.trim())) {
       return json("Enter the numeric Universe ID.", 400);
     }
-    if (typeof rawPlaceId !== "string" || !/^\\d{1,25}$/.test(rawPlaceId.trim())) {
+    if (typeof rawPlaceId !== "string" || !/^\d{1,25}$/.test(rawPlaceId.trim())) {
       return json("Enter the numeric Place ID.", 400);
     }
     if (!(file instanceof File)) {
@@ -44,7 +44,7 @@ export async function POST(request: NextRequest) {
     const universeId = (rawUniverseId as string).trim();
     const placeId = (rawPlaceId as string).trim();
     const robloxUrl =
-      `https://apis.roblox.com/universes/v1/${universeId}/places/${placeId}/versions?versionType=Published`;
+      \`https://apis.roblox.com/universes/v1/\${universeId}/places/\${placeId}/versions?versionType=Published\`;
 
     const upstream = await fetch(robloxUrl, {
       method: "POST",
@@ -74,7 +74,7 @@ export async function POST(request: NextRequest) {
         409: "This Place ID does not belong to the selected Universe ID.",
         413: "The place file is too large for Roblox Open Cloud.",
       };
-      return json(messages[upstream.status] || `Roblox publishing failed (${upstream.status}).`, upstream.status >= 500 ? 502 : upstream.status);
+      return json(messages[upstream.status] || \`Roblox publishing failed (\${upstream.status}).\`, upstream.status >= 500 ? 502 : upstream.status);
     }
 
     return NextResponse.json({
