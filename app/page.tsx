@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { strToU8, zipSync } from "fflate";
+import { upload } from "@vercel/blob/client";
 import FileMergerPanel from "@/app/components/FileMergerPanel";
 import { ArrowUp, Check, Code2, Copy, Download, ExternalLink, Gamepad2, Github, Layers3, LoaderCircle, Sparkles, WandSparkles, X, BrainCircuit, Globe2, Workflow, Clock3, Activity } from "lucide-react";
 
@@ -59,19 +60,40 @@ function PublishNowPanel() {
   }, []);
 
   async function publishNow() {
-    if (!apiKey || !universeId || !placeId || !placeFile) {
-      setFailed(true); setStatus("Complete all fields and select your Roblox place file."); return;
+    if (!apiKey || !/^\\d{1,25}$/.test(universeId.trim()) || !/^\\d{1,25}$/.test(placeId.trim()) || !placeFile) {
+      setFailed(true);
+      setStatus("Vendos API Key, Universe ID numerik, Place ID numerik dhe zgjidh file-in.");
+      return;
+    }
+    if (placeFile.size < 20 || placeFile.size > 50 * 1024 * 1024) {
+      setFailed(true);
+      setStatus("File-i duhet te jete nga 20 bytes deri ne 50 MB.");
+      return;
     }
     const confirmed = window.confirm("Publish this place file to the selected Roblox experience? This creates a new published version and updates the live game.");
     if (!confirmed) return;
-    setPublishing(true); setStatus(""); setFailed(false);
+    setPublishing(true);
+    setStatus("Duke ngarkuar file-in e madh ne menyre te sigurt...");
+    setFailed(false);
     try {
-      const form = new FormData();
-      form.append("apiKey", apiKey);
-      form.append("universeId", universeId.trim());
-      form.append("placeId", placeId.trim());
-      form.append("placeFile", placeFile);
-      const response = await fetch("/api/roblox/publish", { method: "POST", body: form });
+      const safeName = placeFile.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+      const uploaded = await upload(`roblox-publish/${crypto.randomUUID()}-${safeName}`, placeFile, {
+        access: "private",
+        handleUploadUrl: "/api/roblox/upload",
+      });
+
+      setStatus("File-i u ngarkua. Duke publikuar ne Roblox...");
+      const response = await fetch("/api/roblox/publish", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          apiKey,
+          universeId: universeId.trim(),
+          placeId: placeId.trim(),
+          pathname: uploaded.pathname,
+          fileName: placeFile.name,
+        }),
+      });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Publishing failed.");
       setStatus(data.versionNumber ? `Published successfully. Roblox version: ${data.versionNumber}` : "Roblox accepted the place file for publishing.");
@@ -79,14 +101,16 @@ function PublishNowPanel() {
     } catch (error) {
       setFailed(true);
       setStatus(error instanceof Error ? error.message : "Could not publish this place.");
-    } finally { setPublishing(false); }
+    } finally {
+      setPublishing(false);
+    }
   }
 
   return <section className="publish-panel" id="publish-now">
     <div className="section-kicker">ROBLOX OPEN CLOUD</div>
     <h2>Publish Now</h2>
     <p>Replace the content of an existing Roblox place with a new .rbxlx or .rbxl version.</p>
-    <div className="publish-warning">Publishing updates the selected live place. Save a backup version in Roblox Studio before continuing.</div>
+    <div className="publish-warning">Publishing updates the selected live place. Save a backup version in Roblox Studio before continuing. Files up to 50 MB are uploaded through private temporary storage.</div>
     <div className="publish-fields">
       <label>Roblox API Key<input type="password" autoComplete="off" value={apiKey} onChange={e => setApiKey(e.target.value)} placeholder="Paste your Open Cloud API key" /></label>
       <div className="publish-id-row">
@@ -98,7 +122,7 @@ function PublishNowPanel() {
       <button className="generate-button publish-submit" onClick={publishNow} disabled={publishing}>{publishing ? <><LoaderCircle size={16} className="spin"/> Publishing...</> : <>Publish Now <ArrowUp size={16}/></>}</button>
       {status && <p className={failed ? "publish-status error" : "publish-status success"} role="status">{status}</p>}
     </div>
-    <p className="publish-security">Your API key is sent only for this request and is not saved by Madara AI. Use a key limited to the target experience with <strong>universe-places: Write</strong> permission. Current generator output is a script bundle; export a real .rbxlx/.rbxl from Studio before using this publisher.</p>
+    <p className="publish-security">Your API key is sent only for this request and is not saved by Madara AI. Use a key limited to the target experience with <strong>universe-places: Write</strong> permission. Large place files are uploaded directly to private temporary storage and forwarded to Roblox; the API key is not stored.</p>
     <a className="publish-doc-link" href="https://create.roblox.com/docs/cloud/guides/usage-place-publishing" target="_blank" rel="noreferrer">Roblox publishing setup guide <ExternalLink size={13}/></a>
   </section>;
 }
