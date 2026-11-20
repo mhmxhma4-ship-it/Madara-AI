@@ -16,15 +16,16 @@ export default function FileMergerPanel() {
       </div>
 
       <div className="publish-fields">
-        <div className="publish-file-name"><FileArchive size={15} /> Place baze: .rbxl / .rbxlx — hape ne Studio para bashkimit.</div>
-        <div className="publish-file-name"><Layers3 size={15} /> Model per import: .rbxm — zgjidhe nga dritarja qe hap plugin-i.</div>
+        <div className="publish-file-name"><FileArchive size={15} /> 1. Hape place baze (.rbxl ose .rbxlx) ne Roblox Studio.</div>
+        <div className="publish-file-name"><Layers3 size={15} /> 2. Instalo plugin-in .lua ne folderin Plugins te Roblox Studio dhe rihap Studio.</div>
+        <div className="publish-file-name"><Layers3 size={15} /> 3. Kliko butonin MergeRobloxModel ne toolbar dhe zgjidh modelin .rbxm.</div>
         <a className="generate-button publish-submit" href={MERGER_PLUGIN_URL} target="_blank" rel="noreferrer">
           Merr Madara File Merger plugin <ExternalLink size={15} />
         </a>
       </div>
 
       <p className="publish-security"><ShieldCheck size={14} /> Plugin-i perdor SerializationService te Roblox per te lexuar .rbxm, i vendos objektet ne Workspace dhe krijon nje Undo action. Ai nuk ndryshon file origjinale. Pas bashkimit ruaj nje kopje te re te lojes dhe testo para publikimit.</p>
-      <p className="publish-security">Shenim: ky proces kerkon Roblox Studio ne kompjuter. Nuk kryhet direkt nga faqja ne iPhone. Versioni aktual bashkon .rbxm ne nje place te hapur; nuk bashkon dy place .rbxl me njeri-tjetrin.</p>
+      <p className="publish-security">Shenim: ruaje lojen pasi te perfundoje importi. Procesi kerkon Roblox Studio ne kompjuter, nuk kryhet direkt nga faqja ne iPhone. Bashkon nje model .rbxm ne nje place te hapur; nuk bashkon dy place .rbxl me njeri-tjetrin.</p>
     </section>
   );
 }
