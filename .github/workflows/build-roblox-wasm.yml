@@ -34,7 +34,7 @@ jobs:
         uses: taiki-e/install-action@wasm-pack
 
       - name: Compile browser WebAssembly
-        run: wasm-pack build wasm-merger --target web --release --out-dir ../public/roblox-merger --out-name madara_roblox_merger
+        run: wasm-pack build --target web --release --out-dir ../public/roblox-merger --out-name madara_roblox_merger\n        working-directory: wasm-merger
 
       - name: Commit compiled browser engine
         run: |
