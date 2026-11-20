@@ -60,7 +60,7 @@ function PublishNowPanel() {
   }, []);
 
   async function publishNow() {
-    if (!apiKey || !/^\\d{1,25}$/.test(universeId.trim()) || !/^\\d{1,25}$/.test(placeId.trim()) || !placeFile) {
+    if (!apiKey || !/^\d{1,25}$/.test(universeId.trim()) || !/^\d{1,25}$/.test(placeId.trim()) || !placeFile) {
       setFailed(true);
       setStatus("Vendos API Key, Universe ID numerik, Place ID numerik dhe zgjidh file-in.");
       return;
