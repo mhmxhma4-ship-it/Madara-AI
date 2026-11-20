@@ -19,13 +19,13 @@ export async function POST(request: NextRequest) {
     const pathname = typeof body.pathname === "string" ? body.pathname : "";
     const fileName = typeof body.fileName === "string" ? body.fileName.trim().toLowerCase() : "";
 
-    if (!apiKey || apiKey.length < 10 || apiKey.length > 4096 || /\\s/.test(apiKey)) {
+    if (!apiKey || apiKey.length < 10 || apiKey.length > 4096 || /\s/.test(apiKey)) {
       return json("API key is missing or malformed. Paste the complete Roblox Open Cloud key without spaces.", 400);
     }
-    if (!/^\\d{1,25}$/.test(universeId)) {
+    if (!/^\d{1,25}$/.test(universeId)) {
       return json("Enter the numeric Universe ID.", 400);
     }
-    if (!/^\\d{1,25}$/.test(placeId)) {
+    if (!/^\d{1,25}$/.test(placeId)) {
       return json("Enter the numeric Place ID.", 400);
     }
     if (!pathname.startsWith("roblox-publish/") || pathname.includes("..")) {
