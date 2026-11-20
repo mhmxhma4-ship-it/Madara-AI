@@ -1,0 +1,49 @@
+name: Build browser Roblox merger
+
+on:
+  push:
+    branches:
+      - feature/roblox-xml-file-merger
+    paths:
+      - "wasm-merger/**"
+      - ".github/workflows/build-roblox-wasm.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: browser-roblox-merger
+  cancel-in-progress: true
+
+jobs:
+  build-wasm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/roblox-xml-file-merger
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Install wasm-pack
+        uses: taiki-e/install-action@wasm-pack
+
+      - name: Compile browser WebAssembly
+        run: wasm-pack build wasm-merger --target web --release --out-dir ../public/roblox-merger --out-name madara_roblox_merger
+
+      - name: Commit compiled browser engine
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add public/roblox-merger
+          if git diff --cached --quiet; then
+            echo "No generated WASM changes."
+          else
+            git commit -m "Build phone browser Roblox merger WASM"
+            git push
+          fi
