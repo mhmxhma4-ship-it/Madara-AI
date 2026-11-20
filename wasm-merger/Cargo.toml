@@ -10,3 +10,4 @@ crate-type = ["cdylib"]
 wasm-bindgen = "0.2"
 rbx_binary = "3.0.1"
 rbx_dom_weak = "4.2.0"
+getrandom = { version = "0.2", features = ["js"] }
