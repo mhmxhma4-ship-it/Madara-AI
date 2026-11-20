@@ -36,11 +36,12 @@ button.Click:Connect(function()
 		if not file:IsA("File") then
 			error("Roblox Studio did not return a valid File object.")
 		end
-		if file.Size <= 0 or file.Size > MAX_BYTES then
+		local importedFile = file :: File
+		if importedFile.Size <= 0 or importedFile.Size > MAX_BYTES then
 			error("The .rbxm file must be between 1 byte and 100 MB.")
 		end
 
-		local binaryContents = file:GetBinaryContents()
+		local binaryContents = importedFile:GetBinaryContents()
 		if type(binaryContents) ~= "string" or #binaryContents == 0 then
 			error("The selected .rbxm file is empty or could not be read.")
 		end
@@ -77,7 +78,7 @@ button.Click:Connect(function()
 		end
 
 		ChangeHistoryService:FinishRecording(recordingId, Enum.FinishRecordingOperation.Commit)
-		return "SUCCESS: inserted " .. tostring(#inserted) .. " root object(s) from " .. file.Name .. " into Workspace. Use Ctrl+Z to undo, then save the place."
+		return "SUCCESS: inserted " .. tostring(#inserted) .. " root object(s) from " .. importedFile.Name .. " into Workspace. Use Ctrl+Z to undo, then save the place."
 	end)
 
 	if ok then
