@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { strToU8, zipSync } from "fflate";
+import FileMergerPanel from "@/app/components/FileMergerPanel";
 import { ArrowUp, Check, Code2, Copy, Download, ExternalLink, Gamepad2, Github, Layers3, LoaderCircle, Sparkles, WandSparkles, X, BrainCircuit, Globe2, Workflow, Clock3, Activity } from "lucide-react";
 
 type GeneratedFile = { path: string; kind: string; code: string };
@@ -382,7 +383,9 @@ export default function Home() {
       <p className="publish-note">Madara AI uses separate planning, environment, gameplay and code-review agents. Scripts and map geometry still need testing in Roblox Studio. The ZIP is a Rojo source package, not a compiled Roblox place file.</p>
     </section>}
 
-    <StudioConnectorPanel />\n    <PublishNowPanel />\n\n    <section className="steps" id="how-it-works">
+    <StudioConnectorPanel />
+    <FileMergerPanel />
+    <PublishNowPanel />\n\n    <section className="steps" id="how-it-works">
       <div className="section-kicker">FROM IDEA TO EXPERIENCE</div><h2>Your AI team starts here.</h2>
       <div className="steps-grid">
         <article className="step-card"><div className="step-icon"><BrainCircuit/></div><span>01 / ARCHITECT</span><h3>Plan the experience</h3><p>The architect defines the game loop, worlds, progression and systems.</p></article>
