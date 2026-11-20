@@ -45,6 +45,19 @@ function PublishNowPanel() {
   const [status, setStatus] = useState("");
   const [failed, setFailed] = useState(false);
 
+  useEffect(() => {
+    const handleMergedPlace = (event: Event) => {
+      const mergedFile = (event as CustomEvent<File>).detail;
+      if (!(mergedFile instanceof File) || !mergedFile.name.toLowerCase().endsWith(".rbxl")) return;
+      setPlaceFile(mergedFile);
+      setFailed(false);
+      setStatus(`File i bashkuar u zgjodh automatikisht: ${mergedFile.name}. Tani mund te publikosh.`);
+      document.getElementById("publish-now")?.scrollIntoView({ behavior: "smooth", block: "center" });
+    };
+    window.addEventListener("madara:merged-place-ready", handleMergedPlace);
+    return () => window.removeEventListener("madara:merged-place-ready", handleMergedPlace);
+  }, []);
+
   async function publishNow() {
     if (!apiKey || !universeId || !placeId || !placeFile) {
       setFailed(true); setStatus("Complete all fields and select your Roblox place file."); return;
