@@ -36,6 +36,8 @@ jobs:
       - name: Compile browser WebAssembly
         run: wasm-pack build --target web --release --out-dir ../public/roblox-merger --out-name madara_roblox_merger
         working-directory: wasm-merger
+        env:
+          RUSTFLAGS: --cfg getrandom_backend="wasm_js"
 
       - name: Commit compiled browser engine
         run: |
