@@ -60,7 +60,8 @@ export default function FileMergerPanel() {
       }
 
       setStatus("Duke ngarkuar motorin e bashkimit...");
-      const merger = await import(/* webpackIgnore: true */ "/roblox-merger/madara_roblox_merger.js") as MergerModule;
+      const mergerModuleUrl = "/roblox-merger/madara_roblox_merger.js";
+      const merger = await import(/* webpackIgnore: true */ mergerModuleUrl) as MergerModule;
       await merger.default("/roblox-merger/madara_roblox_merger_bg.wasm");
 
       setStatus("Duke bashkuar modelin me lojen baze. Mos e mbyll faqen...");
