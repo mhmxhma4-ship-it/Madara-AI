@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-const MAX_PLACE_SIZE = 50 * 1024 * 1024;
+const MAX_PLACE_SIZE = 100 * 1024 * 1024;
 const json = (message: string, status: number) =>
   NextResponse.json({ error: message }, { status });
 
@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
 
     const bytes = await new Response(stored.stream).arrayBuffer();
     if (bytes.byteLength < 20 || bytes.byteLength > MAX_PLACE_SIZE) {
-      return json("The place file must be between 20 bytes and 50 MB.", 400);
+      return json("Roblox place files must be between 20 bytes and 100 MB. This file is too large; export or optimize it as a smaller .rbxl file before publishing.", 400);
     }
 
     const isXml = fileName.endsWith(".rbxlx") || fileName.endsWith(".rbxlx.xml");
