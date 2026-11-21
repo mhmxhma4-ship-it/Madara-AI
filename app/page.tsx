@@ -65,9 +65,14 @@ function PublishNowPanel() {
       setStatus("Vendos API Key, Universe ID numerik, Place ID numerik dhe zgjidh file-in.");
       return;
     }
-    if (placeFile.size < 20 || placeFile.size > 50 * 1024 * 1024) {
+    if (placeFile.size < 20 || placeFile.size > 500 * 1024 * 1024) {
       setFailed(true);
-      setStatus("File-i duhet te jete nga 20 bytes deri ne 50 MB.");
+      setStatus("File-i duhet te jete nga 20 bytes deri ne 500 MB.");
+      return;
+    }
+    if (placeFile.size > 100 * 1024 * 1024) {
+      setFailed(true);
+      setStatus("Madara mund te pranoje file deri ne 500 MB, por Roblox lejon place files deri ne 100 MB. Ky file eshte shume i madh per publikim; perdor nje version .rbxl te optimizuar nen 100 MB.");
       return;
     }
     const confirmed = window.confirm("Publish this place file to the selected Roblox experience? This creates a new published version and updates the live game.");
@@ -110,7 +115,7 @@ function PublishNowPanel() {
     <div className="section-kicker">ROBLOX OPEN CLOUD</div>
     <h2>Publish Now</h2>
     <p>Replace the content of an existing Roblox place with a new .rbxlx or .rbxl version.</p>
-    <div className="publish-warning">Publishing updates the selected live place. Save a backup version in Roblox Studio before continuing. Files up to 50 MB are uploaded through private temporary storage.</div>
+    <div className="publish-warning">Publishing updates the selected live place. Save a backup version in Roblox Studio before continuing. Files up to 500 MB can be selected for private temporary upload. Roblox publishing supports place files up to 100 MB.</div>
     <div className="publish-fields">
       <label>Roblox API Key<input type="password" autoComplete="off" value={apiKey} onChange={e => setApiKey(e.target.value)} placeholder="Paste your Open Cloud API key" /></label>
       <div className="publish-id-row">
@@ -122,7 +127,7 @@ function PublishNowPanel() {
       <button className="generate-button publish-submit" onClick={publishNow} disabled={publishing}>{publishing ? <><LoaderCircle size={16} className="spin"/> Publishing...</> : <>Publish Now <ArrowUp size={16}/></>}</button>
       {status && <p className={failed ? "publish-status error" : "publish-status success"} role="status">{status}</p>}
     </div>
-    <p className="publish-security">Your API key is sent only for this request and is not saved by Madara AI. Use a key limited to the target experience with <strong>universe-places: Write</strong> permission. Large place files are uploaded directly to private temporary storage and forwarded to Roblox; the API key is not stored.</p>
+    <p className="publish-security">Your API key is sent only for this request and is not saved by Madara AI. Use a key limited to the target experience with <strong>universe-places: Write</strong> permission. Place files up to 500 MB can be uploaded to private temporary storage; Roblox accepts place files up to 100 MB; the API key is not stored.</p>
     <a className="publish-doc-link" href="https://create.roblox.com/docs/cloud/guides/usage-place-publishing" target="_blank" rel="noreferrer">Roblox publishing setup guide <ExternalLink size={13}/></a>
   </section>;
 }
