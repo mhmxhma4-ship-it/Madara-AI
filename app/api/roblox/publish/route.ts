@@ -1,48 +1,52 @@
+import { del, get } from "@vercel/blob";
 import { NextRequest, NextResponse } from "next/server";
 
 export const runtime = "nodejs";
-export const maxDuration = 30;
+export const maxDuration = 60;
 
+const MAX_PLACE_SIZE = 100 * 1024 * 1024;
 const json = (message: string, status: number) =>
   NextResponse.json({ error: message }, { status });
 
 export async function POST(request: NextRequest) {
-  try {
-    const form = await request.formData();
-    const rawApiKey = form.get("apiKey");
-    const apiKey = typeof rawApiKey === "string" ? rawApiKey.trim() : "";
-    const rawUniverseId = form.get("universeId");
-    const rawPlaceId = form.get("placeId");
-    const file = form.get("placeFile");
+  let uploadedPath: string | null = null;
 
-    // Roblox Open Cloud keys can be longer than 500 characters.
-    // Validate a generous upper bound instead of rejecting valid long keys.
+  try {
+    const body = await request.json();
+    const apiKey = typeof body.apiKey === "string" ? body.apiKey.trim() : "";
+    const universeId = typeof body.universeId === "string" ? body.universeId.trim() : "";
+    const placeId = typeof body.placeId === "string" ? body.placeId.trim() : "";
+    const pathname = typeof body.pathname === "string" ? body.pathname : "";
+    const fileName = typeof body.fileName === "string" ? body.fileName.trim().toLowerCase() : "";
+
     if (!apiKey || apiKey.length < 10 || apiKey.length > 4096 || /\s/.test(apiKey)) {
       return json("API key is missing or malformed. Paste the complete Roblox Open Cloud key without spaces.", 400);
     }
-    if (typeof rawUniverseId !== "string" || !/^\d{1,25}$/.test(rawUniverseId.trim())) {
+    if (!/^\d{1,25}$/.test(universeId)) {
       return json("Enter the numeric Universe ID.", 400);
     }
-    if (typeof rawPlaceId !== "string" || !/^\d{1,25}$/.test(rawPlaceId.trim())) {
+    if (!/^\d{1,25}$/.test(placeId)) {
       return json("Enter the numeric Place ID.", 400);
     }
-    if (!(file instanceof File)) {
-      return json("Choose an .rbxlx or .rbxl place file first.", 400);
+    if (!pathname.startsWith("roblox-publish/") || pathname.includes("..")) {
+      return json("The uploaded place file could not be found. Upload it again.", 400);
     }
-
-    const fileName = file.name.toLowerCase();
-    const isXml = fileName.endsWith(".rbxlx") || fileName.endsWith(".rbxlx.xml");
-    const isBinary = fileName.endsWith(".rbxl");
-    if (!isXml && !isBinary) {
+    if (!fileName.endsWith(".rbxl") && !fileName.endsWith(".rbxlx") && !fileName.endsWith(".rbxlx.xml")) {
       return json("Only Roblox .rbxlx, .rbxlx.xml and .rbxl files are supported.", 400);
     }
-    if (file.size < 20 || file.size > 10 * 1024 * 1024) {
-      return json("The place file must be between 20 bytes and 10 MB.", 400);
+
+    uploadedPath = pathname;
+    const stored = await get(pathname, { access: "private" });
+    if (!stored || stored.statusCode !== 200) {
+      return json("The temporary uploaded file has expired or is unavailable. Upload it again.", 404);
     }
 
-    const bytes = await file.arrayBuffer();
-    const universeId = (rawUniverseId as string).trim();
-    const placeId = (rawPlaceId as string).trim();
+    const bytes = await new Response(stored.stream).arrayBuffer();
+    if (bytes.byteLength < 20 || bytes.byteLength > MAX_PLACE_SIZE) {
+      return json("Roblox place files must be between 20 bytes and 100 MB. This file is too large; export or optimize it as a smaller .rbxl file before publishing.", 400);
+    }
+
+    const isXml = fileName.endsWith(".rbxlx") || fileName.endsWith(".rbxlx.xml");
     const robloxUrl =
       `https://apis.roblox.com/universes/v1/${universeId}/places/${placeId}/versions?versionType=Published`;
 
@@ -54,7 +58,7 @@ export async function POST(request: NextRequest) {
       },
       body: bytes,
       cache: "no-store",
-      signal: AbortSignal.timeout(25000),
+      signal: AbortSignal.timeout(55000),
     });
 
     const responseText = await upstream.text();
@@ -67,16 +71,22 @@ export async function POST(request: NextRequest) {
 
     if (!upstream.ok) {
       const messages: Record<number, string> = {
-        400: "Roblox rejected this place file. Make sure it is a valid Roblox place file.",
+        400: "Roblox rejected this place file. Make sure it is a valid Roblox place file and that the IDs match.",
         401: "Roblox rejected the API key or its permissions. Enable universe-places: Write for this experience.",
         403: "Roblox denied publishing to this place. Check the API key permissions and ownership.",
         404: "Roblox could not find this Universe ID or Place ID.",
         409: "This Place ID does not belong to the selected Universe ID.",
-        413: "The place file is too large for Roblox Open Cloud.",
+        413: "Roblox rejected the place because it exceeds Roblox's upload size limit.",
       };
       const upstreamDetail = responseText.trim().slice(0, 1200);
       const diagnostic = upstreamDetail ? ` Roblox details: ${upstreamDetail}` : "";
       return json((messages[upstream.status] || `Roblox publishing failed (${upstream.status}).`) + diagnostic, upstream.status >= 500 ? 502 : upstream.status);
+    }
+
+    try {
+      await del(pathname);
+    } catch {
+      // Publishing succeeded; a leftover temporary blob can be cleaned up later.
     }
 
     return NextResponse.json({
@@ -88,6 +98,7 @@ export async function POST(request: NextRequest) {
     if (error instanceof Error && error.name === "TimeoutError") {
       return json("Roblox took too long to respond. Check the experience version before retrying.", 504);
     }
-    return json("Could not complete the Roblox publishing request.", 500);
+    const message = error instanceof Error ? error.message : "Unknown publishing error.";
+    return json(`Could not complete the Roblox publishing request: ${message}`, 500);
   }
 }

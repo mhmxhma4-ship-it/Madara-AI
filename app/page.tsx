@@ -1,6 +1,8 @@
 "use client";
 import { useEffect, useState } from "react";
 import { strToU8, zipSync } from "fflate";
+import { upload } from "@vercel/blob/client";
+import FileMergerPanel from "@/app/components/FileMergerPanel";
 import { ArrowUp, Check, Code2, Copy, Download, ExternalLink, Gamepad2, Github, Layers3, LoaderCircle, Sparkles, WandSparkles, X, BrainCircuit, Globe2, Workflow, Clock3, Activity } from "lucide-react";
 
 type GeneratedFile = { path: string; kind: string; code: string };
@@ -44,20 +46,59 @@ function PublishNowPanel() {
   const [status, setStatus] = useState("");
   const [failed, setFailed] = useState(false);
 
+  useEffect(() => {
+    const handleMergedPlace = (event: Event) => {
+      const mergedFile = (event as CustomEvent<File>).detail;
+      if (!(mergedFile instanceof File) || !mergedFile.name.toLowerCase().endsWith(".rbxl")) return;
+      setPlaceFile(mergedFile);
+      setFailed(false);
+      setStatus(`File i bashkuar u zgjodh automatikisht: ${mergedFile.name}. Tani mund te publikosh.`);
+      document.getElementById("publish-now")?.scrollIntoView({ behavior: "smooth", block: "center" });
+    };
+    window.addEventListener("madara:merged-place-ready", handleMergedPlace);
+    return () => window.removeEventListener("madara:merged-place-ready", handleMergedPlace);
+  }, []);
+
   async function publishNow() {
-    if (!apiKey || !universeId || !placeId || !placeFile) {
-      setFailed(true); setStatus("Complete all fields and select your Roblox place file."); return;
+    if (!apiKey || !/^\d{1,25}$/.test(universeId.trim()) || !/^\d{1,25}$/.test(placeId.trim()) || !placeFile) {
+      setFailed(true);
+      setStatus("Vendos API Key, Universe ID numerik, Place ID numerik dhe zgjidh file-in.");
+      return;
+    }
+    if (placeFile.size < 20 || placeFile.size > 500 * 1024 * 1024) {
+      setFailed(true);
+      setStatus("File-i duhet te jete nga 20 bytes deri ne 500 MB.");
+      return;
+    }
+    if (placeFile.size > 100 * 1024 * 1024) {
+      setFailed(true);
+      setStatus("Madara mund te pranoje file deri ne 500 MB, por Roblox lejon place files deri ne 100 MB. Ky file eshte shume i madh per publikim; perdor nje version .rbxl te optimizuar nen 100 MB.");
+      return;
     }
     const confirmed = window.confirm("Publish this place file to the selected Roblox experience? This creates a new published version and updates the live game.");
     if (!confirmed) return;
-    setPublishing(true); setStatus(""); setFailed(false);
+    setPublishing(true);
+    setStatus("Duke ngarkuar file-in e madh ne menyre te sigurt...");
+    setFailed(false);
     try {
-      const form = new FormData();
-      form.append("apiKey", apiKey);
-      form.append("universeId", universeId.trim());
-      form.append("placeId", placeId.trim());
-      form.append("placeFile", placeFile);
-      const response = await fetch("/api/roblox/publish", { method: "POST", body: form });
+      const safeName = placeFile.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+      const uploaded = await upload(`roblox-publish/${crypto.randomUUID()}-${safeName}`, placeFile, {
+        access: "private",
+        handleUploadUrl: "/api/roblox/upload",
+      });
+
+      setStatus("File-i u ngarkua. Duke publikuar ne Roblox...");
+      const response = await fetch("/api/roblox/publish", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          apiKey,
+          universeId: universeId.trim(),
+          placeId: placeId.trim(),
+          pathname: uploaded.pathname,
+          fileName: placeFile.name,
+        }),
+      });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Publishing failed.");
       setStatus(data.versionNumber ? `Published successfully. Roblox version: ${data.versionNumber}` : "Roblox accepted the place file for publishing.");
@@ -65,14 +106,16 @@ function PublishNowPanel() {
     } catch (error) {
       setFailed(true);
       setStatus(error instanceof Error ? error.message : "Could not publish this place.");
-    } finally { setPublishing(false); }
+    } finally {
+      setPublishing(false);
+    }
   }
 
   return <section className="publish-panel" id="publish-now">
     <div className="section-kicker">ROBLOX OPEN CLOUD</div>
     <h2>Publish Now</h2>
     <p>Replace the content of an existing Roblox place with a new .rbxlx or .rbxl version.</p>
-    <div className="publish-warning">Publishing updates the selected live place. Save a backup version in Roblox Studio before continuing.</div>
+    <div className="publish-warning">Publishing updates the selected live place. Save a backup version in Roblox Studio before continuing. Files up to 500 MB can be selected for private temporary upload. Roblox publishing supports place files up to 100 MB.</div>
     <div className="publish-fields">
       <label>Roblox API Key<input type="password" autoComplete="off" value={apiKey} onChange={e => setApiKey(e.target.value)} placeholder="Paste your Open Cloud API key" /></label>
       <div className="publish-id-row">
@@ -84,7 +127,7 @@ function PublishNowPanel() {
       <button className="generate-button publish-submit" onClick={publishNow} disabled={publishing}>{publishing ? <><LoaderCircle size={16} className="spin"/> Publishing...</> : <>Publish Now <ArrowUp size={16}/></>}</button>
       {status && <p className={failed ? "publish-status error" : "publish-status success"} role="status">{status}</p>}
     </div>
-    <p className="publish-security">Your API key is sent only for this request and is not saved by Madara AI. Use a key limited to the target experience with <strong>universe-places: Write</strong> permission. Current generator output is a script bundle; export a real .rbxlx/.rbxl from Studio before using this publisher.</p>
+    <p className="publish-security">Your API key is sent only for this request and is not saved by Madara AI. Use a key limited to the target experience with <strong>universe-places: Write</strong> permission. Place files up to 500 MB can be uploaded to private temporary storage; Roblox accepts place files up to 100 MB; the API key is not stored.</p>
     <a className="publish-doc-link" href="https://create.roblox.com/docs/cloud/guides/usage-place-publishing" target="_blank" rel="noreferrer">Roblox publishing setup guide <ExternalLink size={13}/></a>
   </section>;
 }
@@ -382,7 +425,9 @@ export default function Home() {
       <p className="publish-note">Madara AI uses separate planning, environment, gameplay and code-review agents. Scripts and map geometry still need testing in Roblox Studio. The ZIP is a Rojo source package, not a compiled Roblox place file.</p>
     </section>}
 
-    <StudioConnectorPanel />\n    <PublishNowPanel />\n\n    <section className="steps" id="how-it-works">
+    <StudioConnectorPanel />
+    <FileMergerPanel />
+    <PublishNowPanel />\n\n    <section className="steps" id="how-it-works">
       <div className="section-kicker">FROM IDEA TO EXPERIENCE</div><h2>Your AI team starts here.</h2>
       <div className="steps-grid">
         <article className="step-card"><div className="step-icon"><BrainCircuit/></div><span>01 / ARCHITECT</span><h3>Plan the experience</h3><p>The architect defines the game loop, worlds, progression and systems.</p></article>

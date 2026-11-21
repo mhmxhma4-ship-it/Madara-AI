@@ -1,0 +1,15 @@
+{
+  "name": "madara-roblox-merger",
+  "type": "module",
+  "version": "0.1.0",
+  "files": [
+    "madara_roblox_merger_bg.wasm",
+    "madara_roblox_merger.js",
+    "madara_roblox_merger.d.ts"
+  ],
+  "main": "madara_roblox_merger.js",
+  "types": "madara_roblox_merger.d.ts",
+  "sideEffects": [
+    "./snippets/*"
+  ]
+}

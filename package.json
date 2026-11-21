@@ -14,7 +14,8 @@
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "fflate": "^0.8.2",
-    "inngest": "^4.0.0"
+    "inngest": "^4.0.0",
+    "@vercel/blob": "^2.0.0"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
