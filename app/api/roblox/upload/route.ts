@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 export const runtime = "nodejs";
 export const maxDuration = 30;
 
-const MAX_PLACE_SIZE = 50 * 1024 * 1024;
+const MAX_PLACE_SIZE = 500 * 1024 * 1024;
 
 export async function POST(request: NextRequest) {
   try {
