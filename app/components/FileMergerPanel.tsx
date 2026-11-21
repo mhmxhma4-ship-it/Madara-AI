@@ -8,7 +8,7 @@ type MergerModule = {
   merge_place: (base: Uint8Array, model: Uint8Array) => Uint8Array;
 };
 
-const MAX_FILE_SIZE = 40 * 1024 * 1024;
+const MAX_FILE_SIZE = 500 * 1024 * 1024;
 
 function hasRobloxBinaryHeader(bytes: Uint8Array) {
   return bytes.length >= 32 &&
@@ -45,7 +45,7 @@ export default function FileMergerPanel() {
     }
     if (placeFile.size > MAX_FILE_SIZE || modelFile.size > MAX_FILE_SIZE) {
       setError(true);
-      setStatus("Secili file duhet te jete maksimumi 40 MB.");
+      setStatus("Secili file duhet te jete maksimumi 500 MB. Ne iPhone, file-t shume te medhenj mund te mbyllin Safari nese mbaron memoria.");
       return;
     }
 
@@ -130,7 +130,7 @@ export default function FileMergerPanel() {
         {outputUrl && <a className="generate-button publish-submit" href={outputUrl} download={outputName}><Download size={16} /> Shkarko {outputName}</a>}
       </div>
       <p className="publish-security"><ShieldCheck size={14} /> Perpunimi kryhet ne Safari. File-t origjinale nuk ndryshohen. Modeli vendoset nen Workspace te lojes baze. Mbaje faqen hapur deri sa te perfundoje.</p>
-      <p className="publish-security">Kufiri: 40 MB per secilin file. Kontrollo gjithmone file-in e krijuar para publikimit.</p>
+      <p className="publish-security">Kufiri i perpunimit: 500 MB per secilin file. File-t e medhenj mund te kerkojne shume RAM dhe Safari ne iPhone mund te mbyllet. Roblox lejon place files deri ne 100 MB; kontrollo madhesine e file-it final para publikimit.</p>
     </section>
   );
 }
